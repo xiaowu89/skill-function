@@ -4,3 +4,6 @@ docs/
 test-images/
 package.json
 package-lock.json
+.agents/
+.claude/
+skills-lock.json
