@@ -6,7 +6,10 @@ compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY co
 metadata:
   author: bai9707
   version: 1.0.1
-  tags: image-audit content-moderation batch-processing
+  tags:
+    - image-audit
+    - content-moderation
+    - batch-processing
 ---
 
 # Image Content Moderation
