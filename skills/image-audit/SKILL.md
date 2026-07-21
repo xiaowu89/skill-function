@@ -2,7 +2,7 @@
 name: image-audit
 description: Detects adult, political and violent content in images via automated batch auditing. Compresses large images, calls MCP audit service, and outputs results as a table. Use when auditing images, checking image content, scanning photos for inappropriate material, or when the user says audit images, review pictures, check content, or image moderation.
 license: MIT
-compatibility: Requires node npm and nx-mcp-audit MCP service configured
+compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY configured
 metadata:
   author: bai9707
   version: 1.0.1
@@ -15,18 +15,23 @@ Audit images for adult, political, and violent content using the nx-mcp-audit MC
 
 ## Setup
 
-Configure the MCP server in settings.json:
+Configure the MCP server and API key in settings.json:
 
 ```json
 {
   "mcpServers": {
     "nx-mcp-audit": {
       "type": "url",
-      "url": "https://mcp.api-inference.modelscope.net/274be9de7fd649/mcp"
+      "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
+      "env": {
+        "NX_API_KEY": "your-api-key-here"
+      }
     }
   }
 }
 ```
+
+> **No API Key?** Contact WeChat `xiaowu89` to get one.
 
 ## Usage
 

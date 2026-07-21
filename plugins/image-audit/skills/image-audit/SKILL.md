@@ -13,20 +13,25 @@ allow: Read(*), Bash(node:*), Bash(npm:install sharp)
 
 ## 前置条件：配置 MCP 服务
 
-使用本 skill 前，需在 Claude Code 的 `settings.json` 中配置 MCP 服务：
+使用本 skill 前，需在 Claude Code 的 `settings.json` 中配置 MCP 服务及 API Key：
 
 ```json
 {
   "mcpServers": {
     "nx-mcp-audit": {
       "type": "url",
-      "url": "https://mcp.api-inference.modelscope.net/274be9de7fd649/mcp"
+      "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
+      "env": {
+        "NX_API_KEY": "你的API Key"
+      }
     }
   }
 }
 ```
 
 配置后重启 Claude Code 或刷新 MCP 连接，skill 将通过 MCP 协议自动调用 `nx_img_audit` 工具。
+
+> **没有 API Key？** 联系微信 `xiaowu89` 获取。
 
 ## 审核流程
 
@@ -84,9 +89,9 @@ const sharp=require('sharp');
 |------|------|------|
 | `files` | `string[]` | **推荐** — 压缩后的 dataUrl（`data:image/jpeg;base64,...`） |
 | `urls` | `string[]` | 网络图片 HTTP(S) 链接，需服务端能访问外网 |
-| `apiKey` | `string` | **必传**，MCP 服务鉴权 API Key |
+| `apiKey` | `string` | **必传** — 从 MCP 服务环境变量 `NX_API_KEY` 读取，配置在前置条件中 |
 
-> **注意：** `apiKey` 每次调用必须显式传入。
+> `apiKey` 通过 MCP 服务 `env.NX_API_KEY` 注入，skill 调用时自动读取，无需每次手动填写。
 
 **批量策略：**
 - 单次调用传入所有图片的 dataUrl（`files` 数组），服务端逐张审核

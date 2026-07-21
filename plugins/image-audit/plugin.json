@@ -6,9 +6,12 @@
   "mcpServers": {
     "nx-mcp-audit": {
       "type": "url",
-      "url": "https://mcp.api-inference.modelscope.net/274be9de7fd649/mcp",
+      "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
       "description": "图片内容审核服务 — 鉴黄/政治/暴恐识别",
-      "required": true
+      "required": true,
+      "env": {
+        "NX_API_KEY": "填写你的 API Key"
+      }
     }
   },
   "dependencies": {
