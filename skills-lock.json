@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "image-audit": {
+      "source": "git@github.com:bai9707/skill-function.git",
+      "sourceUrl": "git@github.com:bai9707/skill-function.git",
+      "sourceType": "git",
+      "skillPath": "plugins/image-audit/skills/image-audit/SKILL.md",
+      "computedHash": "e3960cb7286f9f33854db523e860c7806f2bb430fa77ed22be6b88f3034a66be"
+    }
+  }
+}
