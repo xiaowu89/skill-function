@@ -1,12 +1,12 @@
 ---
 name: image-audit-en
-description: "Automated image content moderation workflow. Batch audit images for adult, political and violent content. Auto-compress via sharp, call MCP audit service, output results as a table. Requires nx-mcp-audit MCP service configured."
+description: Automated image content moderation workflow. Batch audit images for adult political violent content. Auto-compress via sharp call MCP audit service output results as table. Requires nx-mcp-audit MCP service configured.
 license: MIT
-compatibility: "Claude Code, Cursor, Windsurf, Copilot, any SKILL.md-compatible agent"
+compatibility: Claude Code Cursor Windsurf Copilot SKILL.md-compatible agent
 metadata:
   author: bai9707
-  version: "1.0.1"
-  tags: "image-audit, content-moderation, nsfw-detection, batch-processing"
+  version: 1.0.1
+  tags: image-audit content-moderation nsfw-detection batch-processing
 ---
 
 # Image Content Moderation Expert
