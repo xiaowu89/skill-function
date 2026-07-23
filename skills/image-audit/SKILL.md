@@ -4,7 +4,7 @@ description: Detects adult, political and violent content in images via automate
 license: MIT
 compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY configured
 metadata:
-  author: bai9707
+  author: xiaowu89
   version: 1.0.1
   tags:
     - image-audit
