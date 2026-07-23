@@ -11,9 +11,20 @@ allow: Read(*), Bash(node:*)
 
 你是图片压缩专家，负责调用远程压缩服务对图片进行智能无损压缩。
 
-## 前置条件：配置 MCP 服务
+## 首次使用：自动检测并引导配置
 
-使用本 skill 前，需在 Claude Code 用户目录下创建 `.mcp.json` 文件，配置 Stdio 模式的 MCP 服务：
+Skill 激活后会**先尝试调用** `nx_compress` 工具。如果 MCP 服务未配置，按以下流程引导用户完成配置：
+
+### 流程一：检测 MCP 服务
+
+1. 尝试调用 `nx-mcp-compress` 的 `nx_compress` 工具
+2. 如果返回 **工具不可用** → 进入「引导安装」流程
+3. 如果工具可用但返回 **API Key 错误** → 进入「引导配置 Key」流程
+4. 以上均通过 → 正常执行压缩
+
+### 流程二：引导安装 MCP 服务
+
+提示用户将以下内容添加到用户目录 `%USERPROFILE%\.mcp.json` 中（如果已有 `mcpServers`，在对象内追加 `nx-mcp-compress` 字段）：
 
 ```json
 {
@@ -31,9 +42,16 @@ allow: Read(*), Bash(node:*)
 
 > `settings.json` 不支持 `mcpServers` 顶层字段，MCP 服务必须通过 `.mcp.json` 配置。
 
-配置后重启 Claude Code 或刷新 MCP 连接，skill 将通过 MCP 协议自动调用 `nx_compress` 工具。
+添加后提示用户**重启 Claude Code** 以加载新 MCP 连接。
 
-> **没有 API Key？** 联系微信 `xiaowu89` 获取。
+### 流程三：引导配置 API Key
+
+如果 MCP 服务可用但报 `MISSING_API_KEY` 或 `API_AUTH_FAILED`：
+
+1. 检查 `.mcp.json` 中 `env.NX_API_KEY` 是否已配置
+2. 如果未配置，提示用户填入 API Key
+3. **没有 API Key？** 提示用户联系微信 `xiaowu89` 获取
+4. 配置后重启 Claude Code 生效
 
 ## 压缩流程
 

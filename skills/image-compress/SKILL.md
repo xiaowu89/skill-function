@@ -13,9 +13,13 @@ metadata:
 
 Compress images using the nx-mcp-server remote compression service.
 
-## Setup
+## First-Time Setup
 
-Configure the MCP server in `.mcp.json` (Stdio mode):
+The skill auto-detects MCP configuration on first run. If the `nx_compress` tool is unavailable:
+
+### 1. Install MCP Server
+
+Add to `%USERPROFILE%\.mcp.json`:
 
 ```json
 {
@@ -31,9 +35,14 @@ Configure the MCP server in `.mcp.json` (Stdio mode):
 }
 ```
 
-Restart Claude Code after configuring.
+Restart Claude Code after adding.
 
-> **No API Key?** Contact WeChat `xiaowu89` to get one.
+### 2. Configure API Key
+
+If MCP returns `MISSING_API_KEY` or `API_AUTH_FAILED`:
+- Check that `env.NX_API_KEY` is set in `.mcp.json`
+- **No API Key?** Contact WeChat `xiaowu89` to get one
+- Restart Claude Code after updating
 
 ## Usage
 
