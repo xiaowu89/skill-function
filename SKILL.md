@@ -1,20 +1,17 @@
 ---
 name: skill-function
-description: Review and check images for compliance and safety standards Use when verifying images scanning content or checking photos
-license: MIT
-compatibility: requires nodejs
+description: Review code changes for bugs, regressions, unsafe patterns,
+  and missing tests. Use when the user asks for code review, diff review,
+  PR review, or risk analysis on changes.
+compatibility: Designed for coding agents with file read and diff access
 ---
 
-# Image Review
+# Code Review
 
-Check images for compliance with safety standards.
+When invoked:
 
-## Usage
-
-1. Provide image paths or folders
-2. Images are reviewed automatically
-3. Results show pass or review-needed status
-
-## Output
-
-Each image returns an assessment with details.
+1. Read the diff or files the user points to
+2. Check for bugs and edge cases
+3. Identify unsafe patterns
+4. Suggest test coverage gaps
+5. Produce a structured review with severity ratings
