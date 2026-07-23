@@ -4,7 +4,7 @@ description: >-
   自动化图片内容审核工作流。支持鉴黄、政治、暴恐识别，自动压缩图片并批量调用审核服务，
   以表格汇总结果。Use when auditing images, checking image content,
   scanning photos for inappropriate material.
-version: "1.0.1"
+version: "1.0.2"
 category: 内容审核
 platforms:
   - claude-code
