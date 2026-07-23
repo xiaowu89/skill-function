@@ -1,24 +1,24 @@
 ---
 name: image-audit
-description: Detects inappropriate content in images including adult political and violent material Use when auditing images checking content or scanning photos
+description: Review and check images for compliance and safety standards Use when verifying images scanning content or checking photos
 license: MIT
 compatibility: requires nodejs
 metadata:
   author: bai9707
   version: 1.0.0
-  tags: moderation, audit, images
+  tags: review, check, images
 ---
 
-# Image Audit
+# Image Review
 
-Audit images for inappropriate content.
+Check images for compliance with safety standards.
 
 ## Usage
 
 1. Provide image paths or folders
-2. Images are processed automatically
-3. Results are returned with pass or block status
+2. Images are reviewed automatically
+3. Results show pass or review-needed status
 
 ## Output
 
-Each image returns a safety assessment with details.
+Each image returns an assessment with details.
