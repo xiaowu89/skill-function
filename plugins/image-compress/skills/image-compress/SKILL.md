@@ -108,7 +108,7 @@ console.log('data:image/'+mime+';base64,'+b64);
 "
 ```
 
-> ⚠️ 远程 MCP 的 HTTP body 限制约 50MB，超过的图片需提示用户改用本地 MCP 或先上传 CDN。
+> ⚠️ 远程 MCP 当前限制单张图片 **5MB**。超过 5MB 的图片会因 payload 过大被拒绝，需提示用户改用本地 MCP（Stdio 模式）压缩。
 
 **已上传 CDN 的远程 URL**直接传入 `urls` 参数，无需转换。
 
