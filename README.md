@@ -7,7 +7,7 @@
 ### Claude Code（用户级）
 
 ```bash
-git clone https://github.com/bai9707/skill-function.git /tmp/sf && \
+git clone https://github.com/xiaowu89/skill-function.git /tmp/sf && \
 cp -r /tmp/sf/plugins/image-audit/skills/image-audit/ ~/.claude/skills/ && \
 rm -rf /tmp/sf
 ```
@@ -15,7 +15,7 @@ rm -rf /tmp/sf
 ### Claude Code（项目级）
 
 ```bash
-git clone https://github.com/bai9707/skill-function.git /tmp/sf && \
+git clone https://github.com/xiaowu89/skill-function.git /tmp/sf && \
 cp -r /tmp/sf/plugins/image-audit/skills/image-audit/ .claude/skills/ && \
 rm -rf /tmp/sf
 ```
@@ -23,7 +23,7 @@ rm -rf /tmp/sf
 ### 通过 skills.sh 安装
 
 ```bash
-npx skills add bai9707/skill-function --yes
+npx skills add xiaowu89/skill-function --yes
 ```
 
 ## 配置 MCP 服务
