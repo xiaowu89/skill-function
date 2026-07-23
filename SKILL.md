@@ -1,5 +1,5 @@
 ---
-name: image-audit
+name: skill-function
 description: Review and check images for compliance and safety standards Use when verifying images scanning content or checking photos
 license: MIT
 compatibility: requires nodejs
