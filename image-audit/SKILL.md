@@ -1,45 +1,24 @@
 ---
 name: image-audit
-description: Automated image content moderation workflow for auditing images for adult political and violent content with batch processing and table summary output
+description: Detects inappropriate content in images including adult political and violent material Use when auditing images checking content or scanning photos
 license: MIT
-compatibility: Claude Code Cursor Windsurf Copilot
+compatibility: requires nodejs
 metadata:
   author: bai9707
-  version: 1.0.1
-  tags: image-audit content-moderation batch-processing
+  version: 1.0.0
+  tags: moderation, audit, images
 ---
 
-# Image Content Moderation
+# Image Audit
 
-Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
-
-## Setup
-
-Configure the MCP server in settings.json:
-
-```json
-{
-  "mcpServers": {
-    "nx-mcp-audit": {
-      "type": "url",
-      "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp"
-    }
-  }
-}
-```
+Audit images for inappropriate content.
 
 ## Usage
 
-Say "audit these images" and the skill will:
+1. Provide image paths or folders
+2. Images are processed automatically
+3. Results are returned with pass or block status
 
-1. Collect images from a folder path or URL
-2. Compress large images to fit gateway limits
-3. Call the nx_img_audit MCP tool for each image
-4. Summarize results in a table with pass/block/fail status
-5. Provide recommendations for blocked images
+## Output
 
-## Response Fields
-
-- safe: true for pass, false for blocked
-- source: audit engine (e.g. wechat)
-- summary: aggregate stats (total, pass, block, error)
+Each image returns a safety assessment with details.
