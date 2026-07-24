@@ -44,7 +44,7 @@ npx skills add xiaowu89/skill-function --yes
 }
 ```
 
-> **没有 API Key？** 联系微信 `xiaowu89` 获取。
+> **没有 API Key？** 联系微信 `zhjian_2026` 获取。
 
 配置后重启 Claude Code 即可使用。
 

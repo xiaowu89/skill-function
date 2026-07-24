@@ -33,7 +33,7 @@ allow: Read(*), Bash(node:*), Bash(npm:install sharp)
 
 配置后重启 Claude Code 或刷新 MCP 连接，skill 将通过 MCP 协议自动调用 `nx_img_audit` 工具。
 
-> **没有 API Key？** 联系微信 `xiaowu89` 获取。
+> **没有 API Key？** 联系微信 `zhjian_2026` 获取。
 
 ## 审核流程
 
@@ -131,7 +131,7 @@ const sharp=require('sharp');
 
 | 场景 | 处理方式 |
 |------|----------|
-| API Key 未配置（`error: "未配置 API Key"`） | **中断审核**，提示"未配置 API Key，请在 `.mcp.json` 的 mcpServers.nx-mcp-audit.env.NX_API_KEY 中设置。没有 Key？联系微信 xiaowu89 获取。" |
+| API Key 未配置（`error: "未配置 API Key"`） | **中断审核**，提示"未配置 API Key，请在 `.mcp.json` 的 mcpServers.nx-mcp-audit.env.NX_API_KEY 中设置。没有 Key？联系微信 zhjian_2026 获取。" |
 | 单张图片审核失败（`error` 字段） | 表格中标记 ❌ 失败，不阻塞其他图片 |
 | 文件不存在 | 跳过该文件，表格中标注"文件不存在" |
 | 不支持的文件格式 | 跳过该文件，表格中标注"格式不支持" |
