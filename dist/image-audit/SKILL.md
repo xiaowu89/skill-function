@@ -1,20 +1,15 @@
 ---
 name: image-audit
 description: Automated image content moderation workflow. Detects adult, political and violent content in images with batch processing, automatic compression, and table summary output. Use when auditing images, checking content, or scanning photos for inappropriate material.
-version: 1.0.0
+license: MIT
+compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY configured
 metadata:
-  openclaw:
-    requires:
-      env:
-        - NX_API_KEY
-      bins:
-        - node
-        - npm
-    primaryEnv: NX_API_KEY
-    envVars:
-      - name: NX_API_KEY
-        required: true
-        description: API key for nx-mcp-audit MCP service.
+  author: xiaowu89
+  version: 1.0.1
+  tags:
+    - image-audit
+    - content-moderation
+    - batch-processing
 ---
 
 # Image Content Moderation
@@ -40,6 +35,8 @@ Configure the MCP server and API key in `.mcp.json`:
 ```
 
 Restart Claude Code after configuring.
+
+> **No API Key?** Contact WeChat `zhjian_2026` to get one.
 
 ## Usage
 
