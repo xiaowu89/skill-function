@@ -49,9 +49,11 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 ```
 
 - 找到 → 记录 `url` 和 `NX_API_KEY`，继续步骤 2
-- 找不到 → **立即停止**，引导用户创建 `.mcp.json` 并填写 API Key（联系微信 `zhjian_2026` 获取）
+- 找不到 → 询问用户是否已有 API Key：
+  - **有 Key**：帮用户创建项目根目录 `.mcp.json`，填入用户提供的 Key
+  - **没有 Key**：告知联系微信 `zhjian_2026` 获取，等用户拿到后回来配置
 
-> ⚠️ 配置不存在时不要安装 sharp 或执行任何其他操作，节省时间。
+> ⚠️ 配置缺失时不要安装 sharp 或继续后续步骤，先解决配置再往下走。
 
 ### 步骤 2：安装 sharp + 执行审核（一次调用）
 
@@ -66,7 +68,7 @@ NODE_PATH=$(npm root -g) node /tmp/audit.js
 // /tmp/audit.js — 一次调用完成：收集 → 压缩 → MCP审核 → 汇总
 const fs = require('fs'), path = require('path'), sharp = require('sharp');
 
-const PIC_DIR = '<目标图片目录绝对路径>';     // ← 修改这里
+const PIC_DIR = '<目标图片目录绝对路径>';     // ← 修改这里，必须用正斜杠 / 禁止反斜杠 \（bash heredoc 会转义）
 const MCP_URL = '<从.mcp.json读取的url>';
 const API_KEY = '<从.mcp.json读取的NX_API_KEY>';
 
@@ -178,3 +180,4 @@ const API_KEY = '<从.mcp.json读取的NX_API_KEY>';
 - ❌ 不要省略 `notifications/initialized` 步骤
 - ❌ 不要写中间临时文件传递数据（全在内存中完成）
 - ❌ 不要把流程拆成多次 Bash 调用（一次 `node /tmp/audit.js` 搞定）
+- ❌ 不要使用反斜杠路径（`d:\path`），bash heredoc 会被转义，一律用正斜杠（`d:/path`）
