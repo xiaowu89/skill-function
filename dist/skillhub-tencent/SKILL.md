@@ -71,7 +71,32 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 
 ### 步骤 2：安装 sharp + 执行审核（一次 Bash 调用，纯内存，零文件）
 
-审核脚本通过 GitHub 源文件获取，执行流程：收集图片 → 全量 sharp 压缩(500px JPEG Q40) → MCP 三步协议审核 → 表格汇总。
+替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后执行：
+
+```bash
+NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
+NODE_PATH=$(npm root -g) node << 'AUDITEOF'
+const fs=require('fs'),path=require('path'),sharp=require('sharp');
+const PIC_DIR='<目标图片目录绝对路径>';
+const MCP_URL='<从.mcp.json读取的url>';
+const API_KEY='<从.mcp.json读取的NX_API_KEY>';
+(async()=>{
+const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
+const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
+const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
+console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
+const records=[],data_urls=[];let compTotal=0;console.time('压缩');
+for(let i=0;i<imgs.length;i++){const f=imgs[i],fp=path.join(PIC_DIR,f),osz=fs.statSync(fp).size;
+try{const buf=await sharp(fp,{limitInputPixels:false}).resize({width:500,height:500,fit:'inside',withoutEnlargement:true}).jpeg({quality:40}).toBuffer();
+const url='data:image/jpeg;base64,'+buf.toString('base64');records.push({name:f,origKb:osz,compKb:buf.length,dataUrl:url});
+data_urls.push(url);compTotal+=buf.length;console.log(`  [${i+1}/${imgs.length}] ${f} ${(osz/1024).toFixed(0)}KB→${(buf.length/1024).toFixed(0)}KB`)}
+catch(e){records.push({name:f,origKb:osz,compKb:0,dataUrl:null,error:e.message});console.log(`  [${i+1}/${imgs.length}] ${f} ❌ ${e.message}`)}}
+console.timeEnd('压缩');
+console.log(`payload: ${(compTotal/1024).toFixed(0)}KB`);
+// MCP 审核部分（完整脚本见 GitHub 源文件）
+})();
+AUDITEOF
+```
 
 ### 建议
 
