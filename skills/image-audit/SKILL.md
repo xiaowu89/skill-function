@@ -73,7 +73,7 @@ cat > /tmp/sharp_compress.js << 'EOF'
 const sharp = require('sharp');
 (async () => {
   try {
-    const buf = await sharp(process.argv[1])
+    const buf = await sharp(process.argv[2])
       .resize({ width: 500, height: 500, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 40 })
       .toBuffer();
