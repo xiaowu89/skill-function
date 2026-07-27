@@ -2,7 +2,7 @@
 name: image-audit
 description: Detects adult, political and violent content in images via automated batch auditing. Compresses all images before audit, calls MCP audit service, and outputs results as a table. Use when auditing images, checking image content, scanning photos for inappropriate material, or when the user says audit images, review pictures, check content, or image moderation.
 license: MIT
-compatibility: Requires Node.js with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured
+compatibility: Requires Node.js >= 18 with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured. No Python required.
 metadata:
   author: xiaowu89
   version: 1.0.1
@@ -68,11 +68,11 @@ Skill 启动时自动读取 `.mcp.json`：
 #### 3.1 首次使用：全局安装 sharp（只需一次）
 
 ```bash
-# 检查是否已安装
-node -e "require('sharp')" 2>/dev/null && echo "已安装" || npm install -g sharp
+# 检查是否已安装（设置 NODE_PATH 指向全局模块目录）
+NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null && echo "已安装" || npm install -g sharp
 ```
 
-`npm install -g sharp` 全局安装后，后续所有调用零弹窗、零下载。
+后续所有 node 命令均需加 `NODE_PATH=$(npm root -g)`，确保能找到全局安装的 sharp。
 
 #### 3.2 压缩脚本（内存操作，不落盘）
 
@@ -96,7 +96,7 @@ EOF
 #### 3.3 逐张压缩
 
 ```bash
-node /tmp/sharp_compress.js <输入图片绝对路径>
+NODE_PATH=$(npm root -g) node /tmp/sharp_compress.js <输入图片绝对路径>
 # 输出: {"ok":true,"len":14233,"b64":"/9j/2wBD..."}
 ```
 
@@ -110,51 +110,47 @@ node /tmp/sharp_compress.js <输入图片绝对路径>
 
 ### 步骤 4：初始化 MCP 会话并审核
 
-MCP 请求全部通过 **Python `urllib.request`** 发送，避免 shell curl 拼接 base64 产生 JSON 编码错误。
+**全流程统一用 Node.js**，无需 Python 依赖。`JSON.stringify()` 自动处理 base64，不会出现 shell 拼接导致的编码错误。
 
-#### 4.1 设置请求头
+#### 4.1 第一步：initialize（获取 Session ID）
 
-```python
-H = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json, text/event-stream',
-    'Authorization': f'Bearer {API_KEY}'
-}
+```javascript
+const headers = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json, text/event-stream',
+  'Authorization': `Bearer ${API_KEY}`
+};
+
+const initResp = await fetch(MCP_URL, {
+  method: 'POST', headers,
+  body: JSON.stringify({jsonrpc:'2.0', id:'1', method:'initialize',
+    params: {protocolVersion:'2025-06-18', capabilities:{}, clientInfo:{name:'cc', version:'1'}}})
+});
+const sid = initResp.headers.get('Mcp-Session-Id');
+headers['Mcp-Session-Id'] = sid;
 ```
 
-#### 4.2 第一步：initialize（获取 Session ID）
+#### 4.2 第二步：notifications/initialized ⚠️ 不可跳过
 
-```python
-import json, urllib.request
-req = urllib.request.Request(MCP_URL,
-    data=json.dumps({'jsonrpc':'2.0','id':'1','method':'initialize',
-    'params':{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'cc','version':'1'}}}).encode(),
-    headers=H, method='POST')
-resp = urllib.request.urlopen(req, timeout=30)
-sid = resp.getheader('Mcp-Session-Id')
-H['Mcp-Session-Id'] = sid
+```javascript
+await fetch(MCP_URL, {
+  method: 'POST', headers,
+  body: JSON.stringify({jsonrpc:'2.0', method:'notifications/initialized'})
+});
+// 响应 202，body 为空
 ```
 
-#### 4.3 第二步：notifications/initialized ⚠️ 不可跳过
+#### 4.3 第三步：tools/call（审核图片）
 
-```python
-req = urllib.request.Request(MCP_URL,
-    data=json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'}).encode(),
-    headers=H, method='POST')
-urllib.request.urlopen(req, timeout=30)  # 应返回 202
-```
-
-#### 4.4 第三步：tools/call（审核图片）
-
-```python
-payload = json.dumps({
-    'jsonrpc':'2.0','id':'3','method':'tools/call',
-    'params':{'name':'nx_img_audit','arguments':{'files': data_urls, 'apiKey': API_KEY}}
-}).encode('utf-8')
-req = urllib.request.Request(MCP_URL, data=payload, headers=H, method='POST')
-resp = json.loads(urllib.request.urlopen(req, timeout=120).read().decode())
-inner = json.loads(resp['result']['content'][0]['text'])
-items = inner['items']
+```javascript
+const resp = await fetch(MCP_URL, {
+  method: 'POST', headers,
+  body: JSON.stringify({jsonrpc:'2.0', id:'3', method:'tools/call',
+    params: {name:'nx_img_audit', arguments:{files: data_urls, apiKey: API_KEY}}})
+});
+const raw = await resp.json();
+const inner = JSON.parse(raw.result.content[0].text);
+const items = inner.items;
 ```
 
 | 参数 | 类型 | 必填 | 说明 |
@@ -162,43 +158,17 @@ items = inner['items']
 | `files` | `string[]` | **是** | base64 dataUrl 数组 |
 | `apiKey` | `string` | **是** | 必须传 |
 
-> ⚠️ `json.dumps()` 自动处理 base64 编码，不会出现 shell 拼接导致的 "Failed to Unmarshal json body"。
+> `files` 仅用于本地图片。`urls` 仅用于远程 HTTP 图片。不存在 `imagePath` 参数。
 
-#### 4.4 第三步：tools/call（审核图片）
-
-请求体：
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "3",
-  "method": "tools/call",
-  "params": {
-    "name": "nx_img_audit",
-    "arguments": {
-      "files": ["data:image/jpeg;base64,..."],
-      "apiKey": "{API_KEY}"
-    }
-  }
-}
-```
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:---:|------|
-| `files` | `string[]` | **是** | base64 dataUrl 数组（`data:image/jpeg;base64,...`） |
-| `apiKey` | `string` | **是** | ⚠️ 工具定义标注"可选"，但实测不传返回 `"未配置 API Key"`，**必须传** |
-
-> `files` 参数仅用于本地图片。`urls` 参数仅用于远程 HTTP 图片。不存在 `imagePath` 参数。
-
-#### 4.5 分批策略
+#### 4.4 分批策略
 
 - 每批不超过 **20 张**
-- 压缩后的图片通常几十 KB，8 张总量 < 200KB，单批可轻松容纳
-- 如果有大量未经压缩的大图，计算 payload 总量不超过 **10MB**
-- 按文件大小降序排列，大文件优先
-- 遇到 **413** → 拆分当前批次减半重试
-- 遇到超时 → 等 3 秒重试一次
+- 压缩后图片通常几十 KB，8 张总量 < 200KB，单批轻松容纳
+- 未经压缩的大图计算 payload ≤ **10MB**
+- 按文件大小降序排列
+- **413** → 拆半重试 | 超时 → 等 3s 重试
 
-#### 4.6 分批执行
+#### 4.5 分批执行
 
 逐批等待返回，报告进度 `[N/总数]`。
 
@@ -269,14 +239,14 @@ MCP 返回结构：
 
 ---
 
-## MCP 协议三步（Python 实现）
+## MCP 协议三步（Node.js 实现）
 
 ```
-1. urllib POST → initialize → resp.getheader('Mcp-Session-Id')
+1. fetch() POST → initialize → headers.get('Mcp-Session-Id')
                               ↓
-2. urllib POST → notifications/initialized  (⚠️ 不可跳过)
+2. fetch() POST → notifications/initialized  (⚠️ 不可跳过)
                               ↓
-3. urllib POST → tools/call {name:'nx_img_audit', arguments:{files, apiKey}}
+3. fetch() POST → tools/call {files, apiKey}
                               ↓
               result.content[0].text → JSON.parse → items[]
 ```
