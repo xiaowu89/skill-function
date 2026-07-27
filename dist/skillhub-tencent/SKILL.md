@@ -51,7 +51,7 @@ Audit images for adult, political, and violent content using the nx-mcp-audit MC
 
 Skill 直连 MCP 端点，**无需重启 Claude Code**。
 
-> **No API Key?** Contact WeChat `zhjian_2026` to get one.
+> **No API Key?** 请联系服务提供商获取。
 
 ## 审核流程
 
