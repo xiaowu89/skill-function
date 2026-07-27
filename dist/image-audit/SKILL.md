@@ -38,8 +38,8 @@ Audit images for adult, political, and violent content using the nx-mcp-audit MC
 
 Skill 启动时自动读取 `.mcp.json`：
 - 查找顺序：项目根目录 → 用户家目录（`%USERPROFILE%`）
-- 提取 `url` 字段作为 MCP 端点
-- 提取 `env.NX_API_KEY` 作为认证凭据
+- 提取 `url` 字段 → `MCP_URL`
+- 提取 `env.NX_API_KEY` 字段 → `API_KEY`
 
 > **No API Key?** Contact WeChat `zhjian_2026` to get one.
 
@@ -49,101 +49,132 @@ Skill 启动时自动读取 `.mcp.json`：
 
 ### 步骤 1：读取配置
 
-从项目根目录 `.mcp.json` 读取：
-- `mcpServers["nx-mcp-audit"].url` → MCP 端点
-- `mcpServers["nx-mcp-audit"].env.NX_API_KEY` → API Key
-
-如果文件不存在，尝试用户家目录 `%USERPROFILE%\.mcp.json`。两者都不存在则引导用户创建。
-
-### 步骤 2：收集图片
-
-- 用 `ls` 或 `find` 命令列出目标路径下所有图片（png / jpg / jpeg / webp / bmp / tga）
-- 记录每张图片的文件名和原始大小（KB）
-- 汇报：共 X 张图片，总大小 Y KB
-
-### 步骤 3：压缩全部图片 ⚠️ 不可跳过
-
-**无论图片大小，每一张都必须压缩。** 不区分大小文件。
-
-统一使用 sharp 压缩参数：
-- 最长边：**500px**
-- 格式：**JPEG**
-- 质量：**Q40**
-
-执行方式：
-```bash
-npx sharp-cli -i <input> -o <output> --resize 500 --format jpeg --quality 40
-```
-
-或调用 `npx sharp` 内联处理。sharp 首次运行自动安装。
-
-压缩后汇报：原始总大小 → 压缩后总大小，节省百分比。单张压缩失败不阻塞，标记跳过继续。
-
-### 步骤 4：初始化 MCP 会话并审核
-
-**4.1 读取配置：**
-从步骤 1 读取的 `.mcp.json` 中获取：
+从 `.mcp.json` 读取（项目根目录优先，其次用户家目录）：
 - `MCP_URL` = `mcpServers["nx-mcp-audit"].url`
 - `API_KEY` = `mcpServers["nx-mcp-audit"].env.NX_API_KEY`
 
-**4.2 base64 编码：**
-对每张压缩后的图片做 base64 编码：
+两者都不存在则引导用户创建 `.mcp.json` 并填入 API Key。
+
+### 步骤 2：收集图片
+
+- 用 `ls` 或 `find` 列出目标路径下所有图片（png / jpg / jpeg / webp / bmp / tga）
+- 记录每张图片的文件名和原始大小（KB）
+- 汇报："共 X 张图片，总大小 Y KB"
+
+### 步骤 3：压缩全部图片 ⚠️ 不可跳过
+
+**无论图片原始大小，每一张都必须压缩。** 不区分大小文件。
+
+用 Python Pillow（PIL）处理，sharp 首次需安装，Pillow 更稳定：
+
+```python
+from PIL import Image
+im = Image.open(input_path).convert('RGB')
+w, h = im.size
+if max(w, h) > 500:
+    ratio = 500 / max(w, h)
+    im = im.resize((int(w*ratio), int(h*ratio)), Image.LANCZOS)
+im.save(output_path, 'JPEG', quality=40)
 ```
-data:image/jpeg;base64,<base64字符串>
-```
 
-**4.3 按以下规则分批（同时满足）：**
-- 每批不超过 **20 张**
-- 单批请求体（JSON + base64 dataUrl）总大小不超过 **10MB**（计算方式：所有图片 base64 字符串长度之和 ÷ 1024 ÷ 1024 + 1MB JSON 开销）
-- 按文件大小降序排列，大文件优先
+压缩参数统一：最长边 **500px**，格式 **JPEG**，质量 **Q40**。
 
-**4.4 调用 MCP 工具：**
+输出到临时目录（如 `picture_compressed/`），保留原始文件。汇报压缩前后总大小及节省百分比。单张压缩失败不阻塞，标记跳过继续。
 
-工具名 `nx_img_audit`（所属服务 `nx-mcp-audit`）。
+### 步骤 4：初始化 MCP 会话并审核
 
-| 参数 | 类型 | 必填 | 值 |
-|------|------|:---:|------|
-| `files` | `string[]` | 是 | base64 dataUrl 数组 |
-| `apiKey` | `string` | **否** | ⚠️ 不传（apiKey 是可选参数，无需传入） |
+#### 4.1 设置请求头（全程复用）
 
-> 本地图片只用 `files` 参数，不要用 `urls`（`urls` 仅用于远程 HTTP 图片）。不要使用不存在的 `imagePath` 参数。
+所有请求共用以下头部：
 
-**4.5 调用方式（curl 直连 MCP 端点，无需重启 Claude Code）：**
+| Header | 值 |
+|------|------|
+| `Content-Type` | `application/json` |
+| `Accept` | `application/json, text/event-stream` |
+| `Authorization` | `Bearer {API_KEY}` |
 
-从 `.mcp.json` 读取 `MCP_URL` 和 `API_KEY` 后，两步操作：
+> ⚠️ 同时接受 `application/json` 和 `text/event-stream` 缺一不可，否则 initialize 返回 406。
 
-```
-# 第一步：initialize（获取 Session ID）
+#### 4.2 第一步：initialize（获取 Session ID）
+
+```bash
 curl -s -D - "$MCP_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer $API_KEY" \
   -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"claude-code","version":"1.0"}}}'
+```
 
-# 从响应头提取 Mcp-Session-Id  →  赋值 SID
+从响应头提取 `Mcp-Session-Id` → 赋值 `SID`。
 
-# 第二步：tools/call（传入 Mcp-Session-Id）
+#### 4.3 第二步：notifications/initialized ⚠️ 不可跳过
+
+```bash
 curl -s "$MCP_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Mcp-Session-Id: $SID" \
   -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nx_img_audit","arguments":{"files":["data:image/jpeg;base64,..."]}}}'
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 ```
 
-> ⚠️ 注意：initialize 请求需要传 `Authorization: Bearer` 头。接收响应时需同时接受 `application/json` 和 `text/event-stream`。
+响应应为 `202`（空 body）。**不发送此通知直接调用 tools/call 会报 `-32602 Invalid request parameters`。**
 
-**4.6 分批执行：** 逐批等待返回，报告进度 `[N/总数]`。
+#### 4.4 第三步：tools/call（审核图片）
 
-遇到 **413 Request Entity Too Large** → 将当前批次拆分为两半，分别重试。遇到网络超时 → 等 3 秒重试一次。
-
-### 步骤 5：解析返回并汇总
-
-MCP 返回结构为：
+请求体：
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 2,
+  "id": "3",
+  "method": "tools/call",
+  "params": {
+    "name": "nx_img_audit",
+    "arguments": {
+      "files": ["data:image/jpeg;base64,..."],
+      "apiKey": "{API_KEY}"
+    }
+  }
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `files` | `string[]` | **是** | base64 dataUrl 数组（`data:image/jpeg;base64,...`） |
+| `apiKey` | `string` | **是** | ⚠️ 工具定义标注"可选"，但实测不传返回 `"未配置 API Key"`，**必须传** |
+
+> `files` 参数仅用于本地图片。`urls` 参数仅用于远程 HTTP 图片。不存在 `imagePath` 参数。
+
+curl 命令：
+```bash
+curl -s "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Mcp-Session-Id: $SID" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"nx_img_audit","arguments":{"files":["data:image/jpeg;base64,..."],"apiKey":"{API_KEY}"}}}'
+```
+
+#### 4.5 分批策略
+
+- 每批不超过 **20 张**
+- 压缩后的图片通常几十 KB，8 张总量 < 200KB，单批可轻松容纳
+- 如果有大量未经压缩的大图，计算 payload 总量不超过 **10MB**
+- 按文件大小降序排列，大文件优先
+- 遇到 **413** → 拆分当前批次减半重试
+- 遇到超时 → 等 3 秒重试一次
+
+#### 4.6 分批执行
+
+逐批等待返回，报告进度 `[N/总数]`。
+
+### 步骤 5：解析返回并汇总
+
+MCP 返回结构：
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
   "result": {
     "content": [{ "type": "text", "text": "<JSON字符串>" }],
     "isError": false
@@ -151,7 +182,7 @@ MCP 返回结构为：
 }
 ```
 
-解析路径：`result.content[0].text` → JSON.parse → 得到审核结果对象：
+**解析路径：** `result.content[0].text` → `JSON.parse()` → 审核结果对象：
 
 ```json
 {
@@ -171,7 +202,7 @@ MCP 返回结构为：
 }
 ```
 
-从 `items[0]` 提取每条结果，以表格展示：
+从 `items[i]` 提取每条结果，与原始文件名按索引对应，表格展示：
 
 | 文件 | 原始大小 | 压缩后 | 审核结果 | 引擎 | 说明 |
 |------|------|------|:---:|------|------|
@@ -193,7 +224,8 @@ MCP 返回结构为：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `safe` | `boolean` | `true`=通过，`false`=违规 |
+| `success` | `boolean` | 请求是否成功 |
+| `safe` | `boolean` | `true`=通过，`false`=违规（失败时此字段不存在，通过 `errcode` 判断） |
 | `source` | `string` | 审核引擎（`wechat` / `api`） |
 | `errcode` | `number` | 错误码，`0`=正常 |
 | `errmsg` | `string` | 错误信息，`"ok"`=正常 |
@@ -203,17 +235,40 @@ MCP 返回结构为：
 
 ---
 
+## MCP 协议三步（完整流程）
+
+```
+┌─────────────────────────────────┐
+│ 1. initialize                   │
+│    → 获取 Mcp-Session-Id        │
+│    → 请求头: Authorization      │
+│    → 响应头提取 SID              │
+├─────────────────────────────────┤
+│ 2. notifications/initialized    │  ← ⚠️ 不可跳过！
+│    → 请求头: Mcp-Session-Id     │     缺少此步 → -32602
+│    → 响应: 202 (空 body)        │
+├─────────────────────────────────┤
+│ 3. tools/call                   │
+│    → 请求头: Mcp-Session-Id     │
+│    → method: tools/call          │
+│    → name: nx_img_audit          │
+│    → arguments: {files, apiKey}  │
+└─────────────────────────────────┘
+```
+
+---
+
 ## 常见错误速查
 
 | 错误现象 | 原因 | 正确做法 |
 |------|------|------|
+| `-32602 Invalid request parameters` | 未发送 `notifications/initialized` | 在 initialize 之后、tools/call 之前发送通知 |
+| `406 Not Acceptable` | 缺少 `Accept: application/json, text/event-stream` | 请求头同时声明两种类型 |
+| `"request without mcp-session-id header"` | 未先调 initialize | 从 initialize 响应头获取 SID |
 | `"请提供 urls 或 files 参数"` | 传了不存在的 `imagePath` 参数 | 改用 `files`（base64 dataUrl 数组） |
-| `"413 Request Entity Too Large"` | 单批 payload 超 12MB | 拆分当前批次减半重试 |
-| `"Not Acceptable"` (406) | initialize 请求缺少 Accept 头 | 同时声明 `application/json` 和 `text/event-stream` |
-| `"request without mcp-session-id header"` | 未初始化直接调 tools/call | 先调 initialize 获取 Session ID |
-| `"utf-8 codec can't decode byte"` | 中文文件名直接拼入 JSON | 用 base64 dataUrl 传图片内容 |
-| 请求体过大但未报 413 | 网关静默拒绝 | 严格按 10MB 安全阈值分批 |
-| `.mcp.json` 不存在 | 未创建配置文件 | 引导用户创建 `.mcp.json` |
+| `"未配置 API Key"` | 没传 `apiKey` 参数 | **必须传 `apiKey`**，工具定义说可选是误导 |
+| `413 Request Entity Too Large` | 单批 payload 超限 | 拆分当前批次减半重试 |
+| `utf-8 codec can't decode byte` | 中文文件名直接拼入 JSON | 用 base64 dataUrl 传图片内容，文件名仅用于表格展示 |
 
 ---
 
@@ -221,8 +276,8 @@ MCP 返回结构为：
 
 - ❌ 不要跳过压缩（即使图片很小）
 - ❌ 不要使用 `imagePath` 参数（不存在）
-- ❌ 不要传 `apiKey` 参数（用 `.mcp.json` 环境变量）
-- ❌ 不要传本地文件路径给工具（必须 base64 编码）
-- ❌ 不要在单批塞超过 10MB payload
-- ❌ 不要在 MCP 未初始化时直接调用 tools/call
+- ❌ 不要省略 `apiKey` 参数（不传会导致审核失败）
+- ❌ 不要省略 `notifications/initialized` 步骤（会报 -32602）
+- ❌ 不要传本地文件路径给工具（必须 base64 编码为 dataUrl）
 - ❌ 不要用 `urls` 参数传本地文件（`urls` 仅用于远程 HTTP 链接）
+- ❌ 不要在单批塞超过 10MB 未压缩 payload
