@@ -65,21 +65,35 @@ Skill 启动时自动读取 `.mcp.json`：
 
 **无论图片原始大小，每一张都必须压缩。** 不区分大小文件。
 
-用 Python Pillow（PIL）处理，sharp 首次需安装，Pillow 更稳定：
+用 sharp（Node.js）压缩，`npx -p sharp` 自动下载到 npx 缓存，**不写磁盘、不污染项目目录**：
 
-```python
-from PIL import Image
-im = Image.open(input_path).convert('RGB')
-w, h = im.size
-if max(w, h) > 500:
-    ratio = 500 / max(w, h)
-    im = im.resize((int(w*ratio), int(h*ratio)), Image.LANCZOS)
-im.save(output_path, 'JPEG', quality=40)
+```bash
+# 写入 sharp 压缩脚本 → 执行 → 拿到 base64 → 删除脚本
+cat > /tmp/sharp_compress.js << 'EOF'
+const sharp = require('sharp');
+(async () => {
+  try {
+    const buf = await sharp(process.argv[1])
+      .resize({ width: 500, height: 500, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 40 })
+      .toBuffer();
+    process.stdout.write(JSON.stringify({ok: true, len: buf.length, b64: buf.toString('base64')}));
+  } catch(e) {
+    process.stdout.write(JSON.stringify({ok: false, error: e.message}));
+  }
+})();
+EOF
+
+npx -y -p sharp node /tmp/sharp_compress.js <输入图片路径>
+# 输出: {"ok":true,"len":14233,"b64":"/9j/2wBD..."}
+rm /tmp/sharp_compress.js
 ```
+
+解析 stdout 输出的 JSON，取 `b64` 字段拼 `data:image/jpeg;base64,`。
 
 压缩参数统一：最长边 **500px**，格式 **JPEG**，质量 **Q40**。
 
-输出到临时目录（如 `picture_compressed/`），保留原始文件。汇报压缩前后总大小及节省百分比。单张压缩失败不阻塞，标记跳过继续。
+汇报压缩前后总大小及节省百分比。单张压缩失败不阻塞，标记跳过继续。
 
 ### 步骤 4：初始化 MCP 会话并审核
 
