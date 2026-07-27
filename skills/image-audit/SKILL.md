@@ -110,42 +110,59 @@ node /tmp/sharp_compress.js <输入图片绝对路径>
 
 ### 步骤 4：初始化 MCP 会话并审核
 
-#### 4.1 设置请求头（全程复用）
+MCP 请求全部通过 **Python `urllib.request`** 发送，避免 shell curl 拼接 base64 产生 JSON 编码错误。
 
-所有请求共用以下头部：
+#### 4.1 设置请求头
 
-| Header | 值 |
-|------|------|
-| `Content-Type` | `application/json` |
-| `Accept` | `application/json, text/event-stream` |
-| `Authorization` | `Bearer {API_KEY}` |
-
-> ⚠️ 同时接受 `application/json` 和 `text/event-stream` 缺一不可，否则 initialize 返回 406。
+```python
+H = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'Authorization': f'Bearer {API_KEY}'
+}
+```
 
 #### 4.2 第一步：initialize（获取 Session ID）
 
-```bash
-curl -s -D - "$MCP_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"claude-code","version":"1.0"}}}'
+```python
+import json, urllib.request
+req = urllib.request.Request(MCP_URL,
+    data=json.dumps({'jsonrpc':'2.0','id':'1','method':'initialize',
+    'params':{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'cc','version':'1'}}}).encode(),
+    headers=H, method='POST')
+resp = urllib.request.urlopen(req, timeout=30)
+sid = resp.getheader('Mcp-Session-Id')
+H['Mcp-Session-Id'] = sid
 ```
-
-从响应头提取 `Mcp-Session-Id` → 赋值 `SID`。
 
 #### 4.3 第二步：notifications/initialized ⚠️ 不可跳过
 
-```bash
-curl -s "$MCP_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+```python
+req = urllib.request.Request(MCP_URL,
+    data=json.dumps({'jsonrpc':'2.0','method':'notifications/initialized'}).encode(),
+    headers=H, method='POST')
+urllib.request.urlopen(req, timeout=30)  # 应返回 202
 ```
 
-响应应为 `202`（空 body）。**不发送此通知直接调用 tools/call 会报 `-32602 Invalid request parameters`。**
+#### 4.4 第三步：tools/call（审核图片）
+
+```python
+payload = json.dumps({
+    'jsonrpc':'2.0','id':'3','method':'tools/call',
+    'params':{'name':'nx_img_audit','arguments':{'files': data_urls, 'apiKey': API_KEY}}
+}).encode('utf-8')
+req = urllib.request.Request(MCP_URL, data=payload, headers=H, method='POST')
+resp = json.loads(urllib.request.urlopen(req, timeout=120).read().decode())
+inner = json.loads(resp['result']['content'][0]['text'])
+items = inner['items']
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `files` | `string[]` | **是** | base64 dataUrl 数组 |
+| `apiKey` | `string` | **是** | 必须传 |
+
+> ⚠️ `json.dumps()` 自动处理 base64 编码，不会出现 shell 拼接导致的 "Failed to Unmarshal json body"。
 
 #### 4.4 第三步：tools/call（审核图片）
 
@@ -171,16 +188,6 @@ curl -s "$MCP_URL" \
 | `apiKey` | `string` | **是** | ⚠️ 工具定义标注"可选"，但实测不传返回 `"未配置 API Key"`，**必须传** |
 
 > `files` 参数仅用于本地图片。`urls` 参数仅用于远程 HTTP 图片。不存在 `imagePath` 参数。
-
-curl 命令：
-```bash
-curl -s "$MCP_URL" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SID" \
-  -H "Authorization: Bearer $API_KEY" \
-  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"nx_img_audit","arguments":{"files":["data:image/jpeg;base64,..."],"apiKey":"{API_KEY}"}}}'
-```
 
 #### 4.5 分批策略
 
@@ -262,25 +269,16 @@ MCP 返回结构：
 
 ---
 
-## MCP 协议三步（完整流程）
+## MCP 协议三步（Python 实现）
 
 ```
-┌─────────────────────────────────┐
-│ 1. initialize                   │
-│    → 获取 Mcp-Session-Id        │
-│    → 请求头: Authorization      │
-│    → 响应头提取 SID              │
-├─────────────────────────────────┤
-│ 2. notifications/initialized    │  ← ⚠️ 不可跳过！
-│    → 请求头: Mcp-Session-Id     │     缺少此步 → -32602
-│    → 响应: 202 (空 body)        │
-├─────────────────────────────────┤
-│ 3. tools/call                   │
-│    → 请求头: Mcp-Session-Id     │
-│    → method: tools/call          │
-│    → name: nx_img_audit          │
-│    → arguments: {files, apiKey}  │
-└─────────────────────────────────┘
+1. urllib POST → initialize → resp.getheader('Mcp-Session-Id')
+                              ↓
+2. urllib POST → notifications/initialized  (⚠️ 不可跳过)
+                              ↓
+3. urllib POST → tools/call {name:'nx_img_audit', arguments:{files, apiKey}}
+                              ↓
+              result.content[0].text → JSON.parse → items[]
 ```
 
 ---
