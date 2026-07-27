@@ -25,7 +25,6 @@ dependency:
   - nx-mcp-audit MCP 服务
 ---
 
-
 # Image Content Moderation
 
 Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
@@ -52,7 +51,7 @@ Audit images for adult, political, and violent content using the nx-mcp-audit MC
 
 Skill 直连 MCP 端点，**无需重启 Claude Code**。
 
-> **No API Key?** 请联系服务提供商获取。
+> **No API Key?** Contact WeChat `zhjian_2026` to get one.
 
 ## 审核流程
 
@@ -71,18 +70,21 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 
 ### 步骤 2：安装 sharp + 执行审核（一次 Bash 调用，纯内存，零文件）
 
-替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后执行：
+替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后，heredoc 直接通过 stdin 喂给 node，**不写任何文件**：
 
 ```bash
 NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node << 'AUDITEOF'
 const fs=require('fs'),path=require('path'),sharp=require('sharp');
-const PIC_DIR='<目标图片目录绝对路径>';
+let PIC_DIR='<目标图片目录绝对路径>';
+const SINGLE_FILE='<单张图片路径，为空则审核整个目录>';
 const MCP_URL='<从.mcp.json读取的url>';
 const API_KEY='<从.mcp.json读取的NX_API_KEY>';
 (async()=>{
 const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
-const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
+let imgs;
+if(SINGLE_FILE){imgs=[path.basename(SINGLE_FILE)];PIC_DIR=path.dirname(SINGLE_FILE)}
+else{imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort()}
 const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
 console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
 const records=[],data_urls=[];let compTotal=0;console.time('压缩');
@@ -93,7 +95,23 @@ data_urls.push(url);compTotal+=buf.length;console.log(`  [${i+1}/${imgs.length}]
 catch(e){records.push({name:f,origKb:osz,compKb:0,dataUrl:null,error:e.message});console.log(`  [${i+1}/${imgs.length}] ${f} ❌ ${e.message}`)}}
 console.timeEnd('压缩');
 console.log(`payload: ${(compTotal/1024).toFixed(0)}KB`);
-// MCP 审核部分（完整脚本见 GitHub 源文件）
+console.time('MCP审核');
+const H={'Content-Type':'application/json','Accept':'application/json, text/event-stream','Authorization':`Bearer ${API_KEY}`};
+const r1=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'1',method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'cc',version:'1'}}})});
+const sid=r1.headers.get('Mcp-Session-Id');H['Mcp-Session-Id']=sid;console.log(`MCP: init→${sid}`);
+await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})});console.log('MCP: notified→202');
+let items=[];
+if(data_urls.length>0){const r3=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'3',method:'tools/call',params:{name:'nx_img_audit',arguments:{files:data_urls,apiKey:API_KEY}}})});
+const raw=await r3.json();const inner=JSON.parse(raw.result.content[0].text);items=inner.items}
+console.timeEnd('MCP审核');
+let itemIdx=0,pass=0,block=0,fail=0;
+console.log('\n'+'='.repeat(85));console.log(`${'文件'.padEnd(50)} ${'原始'.padStart(6)} ${'结果'.padStart(6)} ${'引擎'.padStart(6)} 说明`);console.log('-'.repeat(85));
+for(const r of records){const oszS=(r.origKb/1024).toFixed(0)+'KB';
+if(r.dataUrl){const item=items[itemIdx++],safe=item.safe,src=item.source||'-';const ec=item.errcode,em=item.errmsg||item.error||'';let st;
+if(em==='invalid api key'||em==='未配置 API Key'){st='⚠️ 错误';fail++}else if(safe===true){st='✅ 通过';pass++}else if(safe===false){st='⛔ 违规';block++}else{st='❌ 失败';fail++}
+console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${st.padStart(6)} ${src.padStart(6)} ${em.padStart(8)}`)}
+else{console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${'❌ 失败'.padStart(6)} ${'—'.padStart(6)} 压缩失败`);fail++}}
+const total=records.length;console.log(`\n📊 ${total} 张 | ✅ ${pass} 通过 | ⛔ ${block} 违规 | ⚠️ ${fail} 错误/失败 | v${items[0]?.auditVersion||'?'}`);
 })();
 AUDITEOF
 ```

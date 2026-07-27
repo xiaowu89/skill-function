@@ -57,16 +57,18 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后，heredoc 直接通过 stdin 喂给 node，**不写任何文件**：
 
 ```bash
+NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node << 'AUDITEOF'
-const{execSync}=require('child_process');
-let s;try{s=require('sharp')}catch(e){console.log('安装sharp...');execSync('npm install -g sharp',{stdio:'inherit'});s=require('sharp')}
-const fs=require('fs'),path=require('path'),sharp=s;
-const PIC_DIR='<目标图片目录绝对路径>';
+const fs=require('fs'),path=require('path'),sharp=require('sharp');
+let PIC_DIR='<目标图片目录绝对路径>';
+const SINGLE_FILE='<单张图片路径，为空则审核整个目录>';
 const MCP_URL='<从.mcp.json读取的url>';
 const API_KEY='<从.mcp.json读取的NX_API_KEY>';
 (async()=>{
 const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
-const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
+let imgs;
+if(SINGLE_FILE){imgs=[path.basename(SINGLE_FILE)];PIC_DIR=path.dirname(SINGLE_FILE)}
+else{imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort()}
 const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
 console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
 const records=[],data_urls=[];let compTotal=0;console.time('压缩');
