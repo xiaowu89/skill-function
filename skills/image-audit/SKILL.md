@@ -71,13 +71,15 @@ const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
 const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
 const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
 console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
-const records=[],data_urls=[];let compTotal=0;
+const records=[],data_urls=[];let compTotal=0;console.time('压缩');
 for(let i=0;i<imgs.length;i++){const f=imgs[i],fp=path.join(PIC_DIR,f),osz=fs.statSync(fp).size;
 try{const buf=await sharp(fp,{limitInputPixels:false}).resize({width:500,height:500,fit:'inside',withoutEnlargement:true}).jpeg({quality:40}).toBuffer();
 const url='data:image/jpeg;base64,'+buf.toString('base64');records.push({name:f,origKb:osz,compKb:buf.length,dataUrl:url});
 data_urls.push(url);compTotal+=buf.length;console.log(`  [${i+1}/${imgs.length}] ${f} ${(osz/1024).toFixed(0)}KB→${(buf.length/1024).toFixed(0)}KB`)}
 catch(e){records.push({name:f,origKb:osz,compKb:0,dataUrl:null,error:e.message});console.log(`  [${i+1}/${imgs.length}] ${f} ❌ ${e.message}`)}}
+console.timeEnd('压缩');
 console.log(`payload: ${(compTotal/1024).toFixed(0)}KB`);
+console.time('MCP审核');
 const H={'Content-Type':'application/json','Accept':'application/json, text/event-stream','Authorization':`Bearer ${API_KEY}`};
 const r1=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'1',method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'cc',version:'1'}}})});
 const sid=r1.headers.get('Mcp-Session-Id');H['Mcp-Session-Id']=sid;console.log(`MCP: init→${sid}`);
@@ -85,6 +87,7 @@ await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',
 let items=[];
 if(data_urls.length>0){const r3=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'3',method:'tools/call',params:{name:'nx_img_audit',arguments:{files:data_urls,apiKey:API_KEY}}})});
 const raw=await r3.json();const inner=JSON.parse(raw.result.content[0].text);items=inner.items}
+console.timeEnd('MCP审核');
 let itemIdx=0,pass=0,block=0,fail=0;
 console.log('\n'+'='.repeat(85));console.log(`${'文件'.padEnd(50)} ${'原始'.padStart(6)} ${'结果'.padStart(6)} ${'引擎'.padStart(6)} 说明`);console.log('-'.repeat(85));
 for(const r of records){const oszS=(r.origKb/1024).toFixed(0)+'KB';
