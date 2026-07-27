@@ -117,27 +117,29 @@ const API_KEY = '<从.mcp.json读取的NX_API_KEY>';
     items = inner.items;
   }
 
-  // === 汇总：按 records 顺序输出，成功压缩的匹配 items，失败的标记 ❌ ===
+  // === 汇总：errcode != 0 是服务端错误（如 invalid api key），不可当违规 ===
   let itemIdx = 0, pass = 0, block = 0, fail = 0;
-  console.log('\n' + '='.repeat(75));
-  console.log(`${'文件'.padEnd(55)} ${'原始'.padStart(6)} ${'结果'.padStart(6)} ${'引擎'.padStart(6)}`);
-  console.log('-'.repeat(75));
+  console.log('\n' + '='.repeat(85));
+  console.log(`${'文件'.padEnd(50)} ${'原始'.padStart(6)} ${'结果'.padStart(6)} ${'引擎'.padStart(6)} 说明`);
+  console.log('-'.repeat(85));
   for (const r of records) {
     const oszS = (r.origKb/1024).toFixed(0) + 'KB';
     if (r.dataUrl) {
       const item = items[itemIdx++], safe = item.safe, src = item.source || '-';
+      const ec = item.errcode, em = item.errmsg || item.error || '';
       let st;
-      if (safe === true) { st = '✅ 通过'; pass++; }
+      if (ec !== undefined && ec !== 0) { st = '⚠️ 错误'; fail++; }
+      else if (safe === true) { st = '✅ 通过'; pass++; }
       else if (safe === false) { st = '⛔ 违规'; block++; }
       else { st = '❌ 失败'; fail++; }
-      console.log(`${r.name.padEnd(55)} ${oszS.padStart(6)} ${st.padStart(6)} ${src.padStart(6)}`);
+      console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${st.padStart(6)} ${src.padStart(6)} ${em.padStart(8)}`);
     } else {
-      console.log(`${r.name.padEnd(55)} ${oszS.padStart(6)} ${'❌ 失败'.padStart(6)} ${'—'.padStart(6)}`);
+      console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${'❌ 失败'.padStart(6)} ${'—'.padStart(6)} 压缩失败`);
       fail++;
     }
   }
   const total = records.length;
-  console.log(`\n📊 ${total} 张 | ✅ ${pass} 通过 | ⛔ ${block} 违规 | ❌ ${fail} 失败 | v${items[0]?.auditVersion||'?'}`);
+  console.log(`\n📊 ${total} 张 | ✅ ${pass} 通过 | ⛔ ${block} 违规 | ⚠️ ${fail} 错误/失败 | v${items[0]?.auditVersion||'?'}`);
 })();
 ```
 
@@ -168,6 +170,7 @@ const API_KEY = '<从.mcp.json读取的NX_API_KEY>';
 | `-32602 Invalid request parameters` | 未发送 `notifications/initialized` | 必须三步：init → notified → call |
 | `406 Not Acceptable` | 缺少 `Accept` 头 | 同时声明 `application/json` 和 `text/event-stream` |
 | `"请提供 urls 或 files 参数"` | 用了不存在的 `imagePath` | 改用 `files`（base64 dataUrl 数组） |
+| `"invalid api key"` | API Key 错误或过期（errcode=-1） | 检查 `.mcp.json` 中的 Key 是否正确 |
 | `"未配置 API Key"` | 没传 `apiKey` | **必须传**，工具定义说可选是误导 |
 | `413 Payload Too Large` | payload 超限 | 压缩后通常 < 200KB，不触发；未压缩大图需分批 |
 | `Cannot find module 'sharp'` | 未全局安装或缺少 NODE_PATH | `NODE_PATH=$(npm root -g) node ...` |
