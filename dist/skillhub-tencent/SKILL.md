@@ -4,7 +4,7 @@ description: >-
   自动化图片内容审核工作流。支持鉴黄、政治、暴恐识别，自动压缩图片并批量调用审核服务，
   以表格汇总结果。Use when auditing images, checking image content,
   scanning photos for inappropriate material.
-version: "1.0.0"
+version: 1.1.0
 category: 内容审核
 platforms:
   - claude-code
@@ -25,13 +25,13 @@ dependency:
   - nx-mcp-audit MCP 服务
 ---
 
-# 图片内容审核专家
+# Image Content Moderation
 
-自动化图片审核工作流，支持鉴黄、政治、暴恐识别。
+Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
 
-## 前置条件
+## 配置
 
-在项目根目录或用户目录创建 `.mcp.json`，配置 MCP 服务及 API Key：
+在项目根目录创建 `.mcp.json`：
 
 ```json
 {
@@ -40,86 +40,118 @@ dependency:
       "type": "url",
       "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
       "env": {
-        "NX_API_KEY": "你的API Key"
+        "NX_API_KEY": "你的 API Key"
       }
     }
   }
 }
 ```
 
-配置优先级：项目根目录 > 用户家目录。
+查找顺序：项目根目录 → 用户家目录。提取 `url` → `MCP_URL`，`env.NX_API_KEY` → `API_KEY`。
 
-## MCP 工具参数
+Skill 直连 MCP 端点，**无需重启 Claude Code**。
 
-`nx_img_audit` 工具参数：
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|:---:|------|
-| `urls` | `string[]` | 二选一 | 网络图片 HTTP(S) 链接列表 |
-| `files` | `string[]` | 二选一 | 本地图片 base64 dataUrl 列表 |
-| `apiKey` | `string` | 否 | API Key，不传则使用环境变量 |
-
-## 分批策略
-
-1. 每批不超过 20 张
-2. 单批 body 编码后不超过 **10MB**（安全阈值）
-3. 按文件大小降序排列
-4. 遇到 **413** 错误时拆分批次减半重试
+> **No API Key?** Contact WeChat `zhjian_2026` to get one.
 
 ## 审核流程
 
-### 步骤一：收集图片
+### 步骤 1：检查配置（缺少则立即停止）
 
-确定图片来源：
-- **文件夹路径**：列出所有 png/jpg/jpeg/webp/bmp 文件
-- **单张图片路径**：转为 base64 dataUrl
-- **网络 URL**：直接使用
+```bash
+cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
+```
 
-> 收集完成后先汇报：共 X 张图片，预计耗时 Y–Z 秒。
+- 找到 → 记录 `url` 和 `NX_API_KEY`，继续步骤 2
+- 找不到 → 询问用户是否已有 API Key：
+  - **有 Key**：帮用户创建 `~/.mcp.json`（用户家目录），全局和项目安装都通用
+  - **没有 Key**：告知联系微信 `zhjian_2026` 获取，等用户拿到后回来配置
 
-### 步骤二：压缩图片
+> ⚠️ 配置缺失时不要安装 sharp 或继续后续步骤，先解决配置再往下走。
 
-所有图片先压缩再传——MCP 网关 payload 限制约 4MB。sharp 自动安装，参数：最长边 500px，JPEG Q40。
+### 步骤 2：安装 sharp + 执行审核（一次 Bash 调用，纯内存，零文件）
 
-### 步骤三：审核图片
+替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后，heredoc 直接通过 stdin 喂给 node，**不写任何文件**：
 
-调用 `nx-mcp-audit` MCP 服务的 `nx_img_audit` 工具，按分批策略分组。本地图片用 `files` 参数（base64 dataUrl），网络图片用 `urls` 参数。
+```bash
+NODE_PATH=$(npm root -g) node << 'AUDITEOF'
+const{execSync}=require('child_process');
+let s;try{s=require('sharp')}catch(e){console.log('安装sharp...');execSync('npm install -g sharp',{stdio:'inherit'});s=require('sharp')}
+const fs=require('fs'),path=require('path'),sharp=s;
+const PIC_DIR='<目标图片目录绝对路径>';
+const MCP_URL='<从.mcp.json读取的url>';
+const API_KEY='<从.mcp.json读取的NX_API_KEY>';
+(async()=>{
+const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
+const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
+const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
+console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
+const records=[],data_urls=[];let compTotal=0;console.time('压缩');
+for(let i=0;i<imgs.length;i++){const f=imgs[i],fp=path.join(PIC_DIR,f),osz=fs.statSync(fp).size;
+try{const buf=await sharp(fp,{limitInputPixels:false}).resize({width:500,height:500,fit:'inside',withoutEnlargement:true}).jpeg({quality:40}).toBuffer();
+const url='data:image/jpeg;base64,'+buf.toString('base64');records.push({name:f,origKb:osz,compKb:buf.length,dataUrl:url});
+data_urls.push(url);compTotal+=buf.length;console.log(`  [${i+1}/${imgs.length}] ${f} ${(osz/1024).toFixed(0)}KB→${(buf.length/1024).toFixed(0)}KB`)}
+catch(e){records.push({name:f,origKb:osz,compKb:0,dataUrl:null,error:e.message});console.log(`  [${i+1}/${imgs.length}] ${f} ❌ ${e.message}`)}}
+console.timeEnd('压缩');
+console.log(`payload: ${(compTotal/1024).toFixed(0)}KB`);
+console.time('MCP审核');
+const H={'Content-Type':'application/json','Accept':'application/json, text/event-stream','Authorization':`Bearer ${API_KEY}`};
+const r1=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'1',method:'initialize',params:{protocolVersion:'2025-06-18',capabilities:{},clientInfo:{name:'cc',version:'1'}}})});
+const sid=r1.headers.get('Mcp-Session-Id');H['Mcp-Session-Id']=sid;console.log(`MCP: init→${sid}`);
+await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})});console.log('MCP: notified→202');
+let items=[];
+if(data_urls.length>0){const r3=await fetch(MCP_URL,{method:'POST',headers:H,body:JSON.stringify({jsonrpc:'2.0',id:'3',method:'tools/call',params:{name:'nx_img_audit',arguments:{files:data_urls,apiKey:API_KEY}}})});
+const raw=await r3.json();const inner=JSON.parse(raw.result.content[0].text);items=inner.items}
+console.timeEnd('MCP审核');
+let itemIdx=0,pass=0,block=0,fail=0;
+console.log('\n'+'='.repeat(85));console.log(`${'文件'.padEnd(50)} ${'原始'.padStart(6)} ${'结果'.padStart(6)} ${'引擎'.padStart(6)} 说明`);console.log('-'.repeat(85));
+for(const r of records){const oszS=(r.origKb/1024).toFixed(0)+'KB';
+if(r.dataUrl){const item=items[itemIdx++],safe=item.safe,src=item.source||'-';const ec=item.errcode,em=item.errmsg||item.error||'';let st;
+if(em==='invalid api key'||em==='未配置 API Key'){st='⚠️ 错误';fail++}else if(safe===true){st='✅ 通过';pass++}else if(safe===false){st='⛔ 违规';block++}else{st='❌ 失败';fail++}
+console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${st.padStart(6)} ${src.padStart(6)} ${em.padStart(8)}`)}
+else{console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${'❌ 失败'.padStart(6)} ${'—'.padStart(6)} 压缩失败`);fail++}}
+const total=records.length;console.log(`\n📊 ${total} 张 | ✅ ${pass} 通过 | ⛔ ${block} 违规 | ⚠️ ${fail} 错误/失败 | v${items[0]?.auditVersion||'?'}`);
+})();
+AUDITEOF
+```
 
-### 步骤四：汇总结果
+### 建议
 
-| 文件 | 大小 | 结果 | 详情 |
-|------|------|:---:|------|
-| photo.png | 909KB | ✅ 通过 | - |
-| bad.png | 2.8MB | ⛔ 违规 | 包含违规内容 |
-| fail.png | 156KB | ❌ 失败 | 下载失败 |
+- ✅ **通过**：可正常使用
+- ⛔ **违规**：建议删除或人工复核
+- ❌ **失败**：重试一次
 
-### 步骤五：给出建议
+---
 
-- 违规图片：建议删除或人工复核
-- 审核失败：重试一次
-- 通过图片：可正常使用
+## 返回字段速查
 
-## 返回字段
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `safe` | `boolean` | `true`=通过，`false`=违规 |
+| `source` | `string` | 审核引擎（`wechat` / `api`） |
+| `errcode` | `number` | 错误码，`0`=正常 |
+| `errmsg` | `string` | 错误信息，`"ok"`=正常 |
+| `message` | `string` | 审核结果描述 |
+| `auditVersion` | `string` | 服务版本号 |
+| `summary` | `object` | `{total, pass, block, error}` |
 
-| 字段 | 说明 |
-|------|------|
-| `safe` | `true`=通过，`false`=违规 |
-| `source` | 审核引擎来源（wechat / api） |
-| `errcode` | 错误码，0 正常 |
-| `errmsg` | 错误信息 |
-| `auditVersion` | 审核服务版本号 |
-| `summary` | 汇总 `{total, pass, block, error}` |
+## 常见错误速查
 
-## 错误处理
+| 错误现象 | 原因 | 正确做法 |
+|------|------|------|
+| `-32602 Invalid request parameters` | 未发送 `notifications/initialized` | 必须三步：init → notified → call |
+| `406 Not Acceptable` | 缺少 `Accept` 头 | 同时声明 `application/json` 和 `text/event-stream` |
+| `"请提供 urls 或 files 参数"` | 用了不存在的 `imagePath` | 改用 `files`（base64 dataUrl 数组） |
+| `"invalid api key"` | API Key 错误或过期（errcode=-1） | 检查 `.mcp.json` 中的 Key 是否正确 |
+| `"未配置 API Key"` | 没传 `apiKey` | **必须传**，工具定义说可选是误导 |
+| `413 Payload Too Large` | payload 超限 | 压缩后通常 < 200KB，不触发；未压缩大图需分批 |
+| `Cannot find module 'sharp'` | 未全局安装或缺少 NODE_PATH | `NODE_PATH=$(npm root -g) node ...` |
 
-| 场景 | 处理方式 |
-|------|----------|
-| `.mcp.json` 不存在 | 引导用户创建配置 |
-| API Key 未配置 | 中断并提示联系微信 zhjian_2026 获取 |
-| API Key 无效 | 提示检查配置 |
-| 单张失败 | 标记 ❌，不阻塞其他 |
-| 文件不存在 | 跳过并标注 |
-| 服务超时 | 等待 3 秒重试一次 |
-| 413 Payload Too Large | 拆分批次减半重试 |
-| 中文文件名编码错误 | 用 base64 dataUrl 方式避免路径编码问题 |
-| MCP 工具不可用 | 重启 Claude Code |
+## 禁止事项
+
+- ❌ 不要跳过压缩（即使图片很小）
+- ❌ 不要使用 `imagePath` 参数（不存在）
+- ❌ 不要省略 `apiKey` 参数
+- ❌ 不要省略 `notifications/initialized` 步骤
+- ❌ 不要写任何临时文件（heredoc 直接喂 stdin，纯内存执行）
+- ❌ 不要把流程拆成多次 Bash 调用（一次 `node << 'AUDITEOF'` 搞定）
+- ❌ 不要使用反斜杠路径（`d:\path`），bash heredoc 会被转义，一律用正斜杠（`d:/path`）
