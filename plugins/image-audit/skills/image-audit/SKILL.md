@@ -2,7 +2,7 @@
 name: image-audit
 description: Detects adult, political and violent content in images via automated batch auditing. Compresses all images before audit, calls MCP audit service, and outputs results as a table. Use when auditing images, checking image content, scanning photos for inappropriate material, or when the user says audit images, review pictures, check content, or image moderation.
 license: MIT
-compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY configured
+compatibility: Requires Node.js with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured
 metadata:
   author: xiaowu89
   version: 1.0.1
@@ -65,10 +65,18 @@ Skill 启动时自动读取 `.mcp.json`：
 
 **无论图片原始大小，每一张都必须压缩。** 不区分大小文件。
 
-用 sharp（Node.js）压缩，`npx -p sharp` 自动下载到 npx 缓存，**不写磁盘、不污染项目目录**：
+#### 3.1 首次使用：全局安装 sharp（只需一次）
 
 ```bash
-# 写入 sharp 压缩脚本 → 执行 → 拿到 base64 → 删除脚本
+# 检查是否已安装
+node -e "require('sharp')" 2>/dev/null && echo "已安装" || npm install -g sharp
+```
+
+`npm install -g sharp` 全局安装后，后续所有调用零弹窗、零下载。
+
+#### 3.2 压缩脚本（内存操作，不落盘）
+
+```bash
 cat > /tmp/sharp_compress.js << 'EOF'
 const sharp = require('sharp');
 (async () => {
@@ -83,15 +91,20 @@ const sharp = require('sharp');
   }
 })();
 EOF
-
-npx -y -p sharp node /tmp/sharp_compress.js <输入图片路径>
-# 输出: {"ok":true,"len":14233,"b64":"/9j/2wBD..."}
-rm /tmp/sharp_compress.js
 ```
 
-解析 stdout 输出的 JSON，取 `b64` 字段拼 `data:image/jpeg;base64,`。
+#### 3.3 逐张压缩
+
+```bash
+node /tmp/sharp_compress.js <输入图片绝对路径>
+# 输出: {"ok":true,"len":14233,"b64":"/9j/2wBD..."}
+```
+
+每张图片执行一次，解析 stdout 的 JSON，取 `b64` 字段拼 `data:image/jpeg;base64,`。
 
 压缩参数统一：最长边 **500px**，格式 **JPEG**，质量 **Q40**。
+
+全部处理完后 `rm /tmp/sharp_compress.js`。
 
 汇报压缩前后总大小及节省百分比。单张压缩失败不阻塞，标记跳过继续。
 
