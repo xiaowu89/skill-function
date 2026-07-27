@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires Node.js >= 18 with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured. No Python required.
 metadata:
   author: xiaowu89
-  version: 1.0.1
+  version: 1.1.0
   tags:
     - image-audit
     - content-moderation
