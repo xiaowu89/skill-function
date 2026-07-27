@@ -12,9 +12,9 @@ metadata:
     - mcp
 ---
 
-# Image Content Moderation
+# 图片内容审核
 
-Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
+调用 NX MCP 审核服务对图片进行鉴黄、政治、暴恐识别，支持批量处理。
 
 ## 配置
 
