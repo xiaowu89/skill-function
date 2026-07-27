@@ -55,14 +55,13 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 
 > ⚠️ 配置缺失时不要安装 sharp 或继续后续步骤，先解决配置再往下走。
 
-### 步骤 2：安装 sharp + 执行审核（一次 Bash 调用搞定全部）
+### 步骤 2：安装 sharp + 执行审核（一次 Bash 调用，纯内存，零文件）
 
-**必须用 Bash cat heredoc 写入脚本**（Write 工具不支持 `/tmp` 路径）。替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后执行：
+替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后，heredoc 直接通过 stdin 喂给 node，**不写任何文件**：
 
 ```bash
-rm -f /tmp/audit.js
 NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
-cat > /tmp/audit.js << 'AUDITEOF'
+NODE_PATH=$(npm root -g) node << 'AUDITEOF'
 const fs=require('fs'),path=require('path'),sharp=require('sharp');
 const PIC_DIR='<目标图片目录绝对路径>';
 const MCP_URL='<从.mcp.json读取的url>';
@@ -96,7 +95,6 @@ else{console.log(`${r.name.padEnd(50)} ${oszS.padStart(6)} ${'❌ 失败'.padSta
 const total=records.length;console.log(`\n📊 ${total} 张 | ✅ ${pass} 通过 | ⛔ ${block} 违规 | ⚠️ ${fail} 错误/失败 | v${items[0]?.auditVersion||'?'}`);
 })();
 AUDITEOF
-NODE_PATH=$(npm root -g) node /tmp/audit.js
 ```
 
 ### 建议
@@ -137,6 +135,6 @@ NODE_PATH=$(npm root -g) node /tmp/audit.js
 - ❌ 不要使用 `imagePath` 参数（不存在）
 - ❌ 不要省略 `apiKey` 参数
 - ❌ 不要省略 `notifications/initialized` 步骤
-- ❌ 不要写中间临时文件传递数据（全在内存中完成）
-- ❌ 不要把流程拆成多次 Bash 调用（一次 `node /tmp/audit.js` 搞定）
+- ❌ 不要写任何临时文件（heredoc 直接喂 stdin，纯内存执行）
+- ❌ 不要把流程拆成多次 Bash 调用（一次 `node << 'AUDITEOF'` 搞定）
 - ❌ 不要使用反斜杠路径（`d:\path`），bash heredoc 会被转义，一律用正斜杠（`d:/path`）
