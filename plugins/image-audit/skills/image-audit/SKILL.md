@@ -50,7 +50,7 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 
 - 找到 → 记录 `url` 和 `NX_API_KEY`，继续步骤 2
 - 找不到 → 询问用户是否已有 API Key：
-  - **有 Key**：帮用户创建项目根目录 `.mcp.json`，填入用户提供的 Key
+  - **有 Key**：帮用户创建 `~/.mcp.json`（用户家目录），全局和项目安装都通用
   - **没有 Key**：告知联系微信 `zhjian_2026` 获取，等用户拿到后回来配置
 
 > ⚠️ 配置缺失时不要安装 sharp 或继续后续步骤，先解决配置再往下走。
