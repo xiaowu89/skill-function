@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires Node.js >= 18 with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured. No Python required.
 metadata:
   author: xiaowu89
-  version: 1.1.1
+  version: 1.1.2
   tags:
     - image-audit
     - content-moderation
@@ -63,12 +63,15 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node << 'AUDITEOF'
 const fs=require('fs'),path=require('path'),sharp=require('sharp');
-const PIC_DIR='<目标图片目录绝对路径>';
+let PIC_DIR='<目标图片目录绝对路径>';
+const SINGLE_FILE='<单张图片路径，为空则审核整个目录>';
 const MCP_URL='<从.mcp.json读取的url>';
 const API_KEY='<从.mcp.json读取的NX_API_KEY>';
 (async()=>{
 const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
-const imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort();
+let imgs;
+if(SINGLE_FILE){imgs=[path.basename(SINGLE_FILE)];PIC_DIR=path.dirname(SINGLE_FILE)}
+else{imgs=fs.readdirSync(PIC_DIR).filter(f=>exts.includes(path.extname(f).toLowerCase())).sort()}
 const origTotal=imgs.reduce((s,f)=>s+fs.statSync(path.join(PIC_DIR,f)).size,0);
 console.log(`共 ${imgs.length} 张，总 ${(origTotal/1024).toFixed(0)}KB`);
 const records=[],data_urls=[];let compTotal=0;console.time('压缩');
