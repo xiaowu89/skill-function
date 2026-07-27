@@ -27,7 +27,7 @@ Skill 激活后会**先尝试调用** `nx_img_audit` 工具。如果 MCP 服务�
 
 MCP 工具不可用时，按以下顺序查找 `.mcp.json` 文件：
 
-1. **当前工作目录** `.mcp.json`
+1. **项目根目录** `.mcp.json`
 2. **用户家目录** `%USERPROFILE%\.mcp.json`
 
 读取找到的第一个文件内容进行诊断：
@@ -73,12 +73,33 @@ MCP 工具不可用时，按以下顺序查找 `.mcp.json` 文件：
 3. **没有 API Key？** 提示用户联系微信 `zhjian_2026` 获取
 4. 配置后重启 Claude Code 生效
 
+## MCP 工具参数
+
+调用 `nx-mcp-audit` 的 `nx_img_audit` 工具：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|:---:|------|
+| `urls` | `string[]` | 二选一 | 网络图片 HTTP(S) 链接列表（仅限 http/https 开头） |
+| `files` | `string[]` | 二选一 | 本地图片 dataUrl 列表（`data:image/...;base64,...`），远程调用时用此参数传本地图片 |
+| `apiKey` | `string` | 否 | API Key，不传则使用服务端环境变量 |
+
+> ⚠️ `apiKey` 为可选参数，建议不传，由 `.mcp.json` 的 `env.NX_API_KEY` 统一管理。
+
+## 分批策略
+
+MCP 网关有 payload 大小限制（约 12MB）。分批规则：
+
+1. 每批不超过 20 张
+2. 单批 body 编码后不超过 **10MB**（安全阈值）
+3. 按文件大小降序排列，大文件优先
+4. 遇到 **413 Request Entity Too Large** 时，拆分当前批次减半重试
+
 ## 审核流程
 
 ### 步骤一：收集图片
 
 - 文件夹路径：用 `ls` 列出所有 `png/jpg/jpeg/webp/bmp/tga` 文件
-- 单张图片路径：直接处理
+- 单张图片路径：直接处理，转为 base64 dataUrl
 - 网络 URL：直接传入 HTTP 链接
 
 收集完成后汇报：共 X 张图片。
@@ -89,36 +110,41 @@ MCP 工具不可用时，按以下顺序查找 `.mcp.json` 文件：
 
 ### 步骤三：调用审核服务
 
-调用 `nx-mcp-audit` 的 `nx_img_audit` 工具，每次最多 20 张。
+调用 `nx-mcp-audit` 的 `nx_img_audit` 工具，按分批策略分组发送。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `imagePath` | `string` | 是 | 图片 URL |
-| `apiKey` | `string` | 是 | 从 `.mcp.json` 读取 |
+本地图片通过 `files` 参数传入 base64 dataUrl 列表，网络图片通过 `urls` 参数传入 HTTP 链接。
 
 ### 步骤四：汇总结果
 
 以表格展示：
 
 | 文件 | 大小 | 审核状态 | 引擎 | 建议 |
-|------|------|----------|------|------|
+|------|------|:---:|------|------|
 
 **返回字段：**
 | 字段 | 说明 |
 |------|------|
 | `safe` | true 通过，false 违规 |
 | `source` | 审核引擎（如 wechat） |
+| `errcode` | 错误码，0 正常 |
+| `errmsg` | 错误信息 |
+| `message` | 审核结果描述 |
+| `auditVersion` | 审核服务版本号 |
 | `summary` | 汇总 `{total, pass, block, error}` |
 
 ## 错误处理
 
 | 场景 | 处理方式 |
 |------|----------|
-| API Key 未配置 | 中断操作，提示"未配置 API Key。没有 Key？联系微信 zhjian_2026 获取。" |
+| `.mcp.json` 不存在 | 引导用户创建配置 |
+| API Key 未配置 | 中断操作，提示"未配置 API Key。联系微信 zhjian_2026 获取。" |
+| API Key 无效 | 提示检查 `.mcp.json` 配置 |
 | 文件不存在 | 跳过，标注"文件不存在" |
 | 下载失败 | 标记 ❌，不阻塞其他 |
 | 网络超时 | 等待 3 秒重试 |
-| API Key 无效 | 提示检查配置 |
+| 413 Payload Too Large | 拆分当前批次，减半重试 |
+| 中文文件名编码错误 | 使用 base64 dataUrl 传递，避免路径中的中文编码问题 |
+| MCP 工具不可用 | 重启 Claude Code 后重试 |
 
 ## 注意事项
 

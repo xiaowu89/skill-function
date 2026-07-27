@@ -42,18 +42,23 @@ Skill 直连 MCP 端点，**无需重启 Claude Code**。
 
 ## 审核流程
 
-### 步骤 1：读取配置 + 确保 sharp 可用
+### 步骤 1：检查配置（缺少则立即停止）
 
 ```bash
 cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
-NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 ```
 
-### 步骤 2：执行审核脚本（一次调用完成全部操作）
+- 找到 → 记录 `url` 和 `NX_API_KEY`，继续步骤 2
+- 找不到 → **立即停止**，引导用户创建 `.mcp.json` 并填写 API Key（联系微信 `zhjian_2026` 获取）
+
+> ⚠️ 配置不存在时不要安装 sharp 或执行任何其他操作，节省时间。
+
+### 步骤 2：安装 sharp + 执行审核（一次调用）
 
 将以下脚本保存为 `/tmp/audit.js`，修改脚本开头的 `PIC_DIR` 为目标图片目录，然后执行：
 
 ```bash
+NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node /tmp/audit.js
 ```
 
