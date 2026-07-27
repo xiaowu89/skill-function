@@ -1,19 +1,26 @@
 ---
 name: image-audit
-description: >-
-  自动化图片内容审核工作流。传入图片路径或 URL，自动完成格式检查、压缩、审核，
-  并以表格形式汇总所有审核结果。需要先配置 nx-mcp-audit MCP 服务。
-model: claude-sonnet-5
-allow: Read(*), Bash(node:*), Bash(npm:install sharp)
+description: Detects adult, political and violent content in images via automated batch auditing. Compresses all images before audit, calls MCP audit service, and outputs results as a table. Use when auditing images, checking image content, scanning photos for inappropriate material, or when the user says audit images, review pictures, check content, or image moderation.
+license: MIT
+compatibility: Requires node npm and nx-mcp-audit MCP service with NX_API_KEY configured
+metadata:
+  author: xiaowu89
+  version: 1.0.1
+  tags:
+    - image-audit
+    - content-moderation
+    - batch-processing
 ---
 
-# 图片内容审核专家
+# Image Content Moderation
 
-你是图片内容审核专家，负责对图片进行鉴黄、政治、暴恐识别。
+Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
 
-## 前置条件：配置 MCP 服务
+## 配置
 
-使用本 skill 前，需在 Claude Code 用户目录下创建 `.mcp.json` 文件，配置 MCP 服务及 API Key：
+审核服务通过 **curl 直连 MCP 端点**，无需 Claude Code 加载 MCP 服务，**安装后无需重启**。
+
+在项目根目录创建 `.mcp.json`：
 
 ```json
 {
@@ -22,129 +29,200 @@ allow: Read(*), Bash(node:*), Bash(npm:install sharp)
       "type": "url",
       "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
       "env": {
-        "NX_API_KEY": "你的API Key"
+        "NX_API_KEY": "你的 API Key"
       }
     }
   }
 }
 ```
 
-> `settings.json` 不支持 `mcpServers` 顶层字段，MCP 服务必须通过 `.mcp.json` 配置。
+Skill 启动时自动读取 `.mcp.json`：
+- 查找顺序：项目根目录 → 用户家目录（`%USERPROFILE%`）
+- 提取 `url` 字段作为 MCP 端点
+- 提取 `env.NX_API_KEY` 作为认证凭据
 
-配置后重启 Claude Code 或刷新 MCP 连接，skill 将通过 MCP 协议自动调用 `nx_img_audit` 工具。
+> **No API Key?** Contact WeChat `zhjian_2026` to get one.
 
-> **没有 API Key？** 联系微信 `zhjian_2026` 获取。
+---
 
-## 审核流程
+## 审核流程（严格按此顺序执行，不可跳过或变更）
 
-当用户要求审核图片时，严格按以下步骤执行：
+### 步骤 1：读取配置
 
-### 步骤一：收集图片
+从项目根目录 `.mcp.json` 读取：
+- `mcpServers["nx-mcp-audit"].url` → MCP 端点
+- `mcpServers["nx-mcp-audit"].env.NX_API_KEY` → API Key
 
-确定图片来源——
-- **文件夹路径**（如 `E:/images/`）：用 `ls` 列出所有 `png/jpg/jpeg/webp/bmp` 文件
-- **网络 URL**：用 `curl` 下载到临时目录，再转为 dataUrl
-- **单张图片路径**：直接转为 dataUrl
+如果文件不存在，尝试用户家目录 `%USERPROFILE%\.mcp.json`。两者都不存在则引导用户创建。
 
-> 所有图片统一转为 dataUrl 后通过 `files` 参数传入，避免服务端网络限制导致审核失败。
+### 步骤 2：收集图片
 
-收集完成后，先向用户汇报：共 X 张图片，预计耗时 Y–Z 秒（单张约 3–8 秒）。
+- 用 `ls` 或 `find` 命令列出目标路径下所有图片（png / jpg / jpeg / webp / bmp / tga）
+- 记录每张图片的文件名和原始大小（KB）
+- 汇报：共 X 张图片，总大小 Y KB
 
-### 步骤二：压缩图片
+### 步骤 3：压缩全部图片 ⚠️ 不可跳过
 
-所有图片必须先压缩再传——MCP 网关 payload 限制约 4MB，原始大图 dataUrl 超限会被直接拒绝。
+**无论图片大小，每一张都必须压缩。** 不区分大小文件。
 
-首先确保 `sharp` 可用（自动安装，首次约 11 秒，后续秒过）：
+统一使用 sharp 压缩参数：
+- 最长边：**500px**
+- 格式：**JPEG**
+- 质量：**Q40**
 
+执行方式：
 ```bash
-node -e "require('sharp')" 2>/dev/null || npm install sharp --no-save
+npx sharp-cli -i <input> -o <output> --resize 500 --format jpeg --quality 40
 ```
 
-之后使用 `sharp` 压缩，参数：最长边 500px，JPEG Q40：
+或调用 `npx sharp` 内联处理。sharp 首次运行自动安装。
 
-```bash
-node -e "
-const fs=require('fs');
-const sharp=require('sharp');
-(async()=>{
-  const path='图片路径';
-  const raw=fs.readFileSync(path);
-  const compressed=await sharp(raw,{limitInputPixels:false})
-    .resize(500,500,{fit:'inside',withoutEnlargement:true})
-    .jpeg({quality:40})
-    .toBuffer();
-  const b64=compressed.toString('base64');
-  console.log('data:image/jpeg;base64,'+b64);
-  console.error(path+': '+(raw.length/1024).toFixed(0)+'KB → '+(compressed.length/1024).toFixed(0)+'KB');
-})();
-"
+压缩后汇报：原始总大小 → 压缩后总大小，节省百分比。单张压缩失败不阻塞，标记跳过继续。
+
+### 步骤 4：初始化 MCP 会话并审核
+
+**4.1 读取配置：**
+从步骤 1 读取的 `.mcp.json` 中获取：
+- `MCP_URL` = `mcpServers["nx-mcp-audit"].url`
+- `API_KEY` = `mcpServers["nx-mcp-audit"].env.NX_API_KEY`
+
+**4.2 base64 编码：**
+对每张压缩后的图片做 base64 编码：
+```
+data:image/jpeg;base64,<base64字符串>
 ```
 
-> 压缩后的 dataUrl 通常 < 100KB，稳定通过网关限制。审核准确度不受影响。
+**4.3 按以下规则分批（同时满足）：**
+- 每批不超过 **20 张**
+- 单批请求体（JSON + base64 dataUrl）总大小不超过 **10MB**（计算方式：所有图片 base64 字符串长度之和 ÷ 1024 ÷ 1024 + 1MB JSON 开销）
+- 按文件大小降序排列，大文件优先
 
-### 步骤三：审核每张图片
+**4.4 调用 MCP 工具：**
 
-调用 `nx-mcp-audit` MCP 服务的 `nx_img_audit` 工具。
+工具名 `nx_img_audit`（所属服务 `nx-mcp-audit`）。
 
-**参数规则：**
-| 参数 | 类型 | 用法 |
-|------|------|------|
-| `files` | `string[]` | **推荐** — 压缩后的 dataUrl（`data:image/jpeg;base64,...`） |
-| `urls` | `string[]` | 网络图片 HTTP(S) 链接，需服务端能访问外网 |
-| `apiKey` | `string` | **必传** — 从 MCP 服务环境变量 `NX_API_KEY` 读取，配置在前置条件中 |
+| 参数 | 类型 | 必填 | 值 |
+|------|------|:---:|------|
+| `files` | `string[]` | 是 | base64 dataUrl 数组 |
+| `apiKey` | `string` | **否** | ⚠️ 不传（apiKey 是可选参数，无需传入） |
 
-> `apiKey` 通过 MCP 服务 `env.NX_API_KEY` 注入，skill 调用时自动读取，无需每次手动填写。
+> 本地图片只用 `files` 参数，不要用 `urls`（`urls` 仅用于远程 HTTP 图片）。不要使用不存在的 `imagePath` 参数。
 
-**批量策略：**
-- 单次调用传入所有图片的 dataUrl（`files` 数组），服务端逐张审核
-- 单批建议不超过 20 张，超出时分批进行
+**4.5 调用方式（curl 直连 MCP 端点，无需重启 Claude Code）：**
 
-### 步骤四：汇总结果
+从 `.mcp.json` 读取 `MCP_URL` 和 `API_KEY` 后，两步操作：
 
-以表格形式汇总所有审核结果：
+```
+# 第一步：initialize（获取 Session ID）
+curl -s -D - "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"claude-code","version":"1.0"}}}'
 
-| 文件 | 大小 | 结果 | 详情 |
-|------|------|------|------|
-| photo1.png | 909KB | ✅ 通过 | - |
-| photo2.png | 2.8MB | ⛔ 违规 | 图片包含违规内容 |
-| photo3.png | 156KB | ❌ 失败 | 下载失败 HTTP 404 |
+# 从响应头提取 Mcp-Session-Id  →  赋值 SID
 
-**返回结果字段说明：**
+# 第二步：tools/call（传入 Mcp-Session-Id）
+curl -s "$MCP_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Mcp-Session-Id: $SID" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"nx_img_audit","arguments":{"files":["data:image/jpeg;base64,..."]}}}'
+```
+
+> ⚠️ 注意：initialize 请求需要传 `Authorization: Bearer` 头。接收响应时需同时接受 `application/json` 和 `text/event-stream`。
+
+**4.6 分批执行：** 逐批等待返回，报告进度 `[N/总数]`。
+
+遇到 **413 Request Entity Too Large** → 将当前批次拆分为两半，分别重试。遇到网络超时 → 等 3 秒重试一次。
+
+### 步骤 5：解析返回并汇总
+
+MCP 返回结构为：
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "content": [{ "type": "text", "text": "<JSON字符串>" }],
+    "isError": false
+  }
+}
+```
+
+解析路径：`result.content[0].text` → JSON.parse → 得到审核结果对象：
+
+```json
+{
+  "success": true,
+  "message": "审核完成: 通过 6, 违规 2, 失败 0",
+  "items": [
+    {
+      "safe": true,
+      "errcode": 0,
+      "errmsg": "ok",
+      "source": "wechat",
+      "message": "图片审核通过"
+    }
+  ],
+  "summary": { "total": 8, "pass": 6, "block": 2, "error": 0 },
+  "auditVersion": "1.0.18"
+}
+```
+
+从 `items[0]` 提取每条结果，以表格展示：
+
+| 文件 | 原始大小 | 压缩后 | 审核结果 | 引擎 | 说明 |
+|------|------|------|:---:|------|------|
+| photo.png | 909KB | 45KB | ✅ 通过 | wechat | 图片审核通过 |
+| bad.png | 2.8MB | 112KB | ⛔ 违规 | api | 包含违规内容 |
+| err.png | 156KB | — | ❌ 失败 | — | 压缩失败 |
+
+### 步骤 6：给出建议
+
+- ✅ **通过**：可正常使用
+- ⛔ **违规**：建议删除或人工复核
+- ❌ **失败**：重试一次，仍失败则跳过
+
+最后输出汇总：`📊 N 张 | ✅ X 通过 | ⛔ Y 违规 | ❌ Z 失败`
+
+---
+
+## 返回字段速查
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `safe` | `boolean` | `true`=通过，`false`=违规 |
-| `message` | `string` | 审核结果描述（如 `"图片审核通过"`） |
-| `source` | `string` | 审核引擎来源（如 `"wechat"`） |
-| `errcode` | `number` | 引擎级错误码，`0` 表示正常 |
-| `errmsg` | `string` | 引擎级错误信息，正常时为 `"ok"` |
-| `error` | `string` | 请求级失败原因（下载失败、网络错误等），存在此字段表示未完成审核 |
-| `summary` | `object` | 汇总统计 `{total, pass, block, error}` |
-| `auditVersion` | `string` | 审核服务版本号 |
+| `source` | `string` | 审核引擎（`wechat` / `api`） |
+| `errcode` | `number` | 错误码，`0`=正常 |
+| `errmsg` | `string` | 错误信息，`"ok"`=正常 |
+| `message` | `string` | 审核结果描述 |
+| `auditVersion` | `string` | 服务版本号 |
+| `summary` | `object` | `{total, pass, block, error}` |
 
-### 步骤五：给出建议
+---
 
-- 违规图片（`safe: false`）：建议删除或人工复核
-- 审核失败（存在 `error` 字段）：检查图片是否可访问，重试一次
-- 通过图片（`safe: true`）：可正常使用
+## 常见错误速查
 
-## 错误处理
+| 错误现象 | 原因 | 正确做法 |
+|------|------|------|
+| `"请提供 urls 或 files 参数"` | 传了不存在的 `imagePath` 参数 | 改用 `files`（base64 dataUrl 数组） |
+| `"413 Request Entity Too Large"` | 单批 payload 超 12MB | 拆分当前批次减半重试 |
+| `"Not Acceptable"` (406) | initialize 请求缺少 Accept 头 | 同时声明 `application/json` 和 `text/event-stream` |
+| `"request without mcp-session-id header"` | 未初始化直接调 tools/call | 先调 initialize 获取 Session ID |
+| `"utf-8 codec can't decode byte"` | 中文文件名直接拼入 JSON | 用 base64 dataUrl 传图片内容 |
+| 请求体过大但未报 413 | 网关静默拒绝 | 严格按 10MB 安全阈值分批 |
+| `.mcp.json` 不存在 | 未创建配置文件 | 引导用户创建 `.mcp.json` |
 
-| 场景 | 处理方式 |
-|------|----------|
-| API Key 未配置（`error: "未配置 API Key"`） | **中断审核**，提示"未配置 API Key，请在 `.mcp.json` 的 mcpServers.nx-mcp-audit.env.NX_API_KEY 中设置。没有 Key？联系微信 zhjian_2026 获取。" |
-| 单张图片审核失败（`error` 字段） | 表格中标记 ❌ 失败，不阻塞其他图片 |
-| 文件不存在 | 跳过该文件，表格中标注"文件不存在" |
-| 不支持的文件格式 | 跳过该文件，表格中标注"格式不支持" |
-| MCP 服务超时或不可用 | 提示"审核服务暂时不可用，请稍后重试"，等待 5 秒重试一次 |
-| API Key 无效（`errcode != 0`） | 提示用户检查 `apiKey` 配置 |
-| 整批审核全部失败 | 检查网络连接和 API Key，建议用户稍后重试 |
-| 网络图片下载失败 | 该图片标记 ❌ 失败并附错误原因，不影响同批其他图片 |
+---
 
-## 注意事项
+## 禁止事项
 
-- 单张图片审核约 3–8 秒，批量审核时告知用户预计耗时
-- `safe=true` 通过，`safe=false` 违规，`error` 字段存在表示请求级失败
-- `summary.block` 即为违规数量，`summary.error` 为失败数量
-- `auditVersion` 可用于确认服务版本
-- 图片大小无硬性限制，但 dataUrl 编码后体积增大约 33%，建议单张不超过 10MB
-- `urls` 参数依赖服务端网络环境，外部图片建议优先用 `files` 参数传 dataUrl
+- ❌ 不要跳过压缩（即使图片很小）
+- ❌ 不要使用 `imagePath` 参数（不存在）
+- ❌ 不要传 `apiKey` 参数（用 `.mcp.json` 环境变量）
+- ❌ 不要传本地文件路径给工具（必须 base64 编码）
+- ❌ 不要在单批塞超过 10MB payload
+- ❌ 不要在 MCP 未初始化时直接调用 tools/call
+- ❌ 不要用 `urls` 参数传本地文件（`urls` 仅用于远程 HTTP 链接）
