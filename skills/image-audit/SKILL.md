@@ -60,9 +60,10 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 替换 `PIC_DIR`、`MCP_URL`、`API_KEY` 后，heredoc 直接通过 stdin 喂给 node，**不写任何文件**：
 
 ```bash
-NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || { npm install -g sharp || { echo '❌ sharp 安装失败，请手动执行: npm install -g sharp'; exit 1; }; }
 NODE_PATH=$(npm root -g) node << 'AUDITEOF'
-const fs=require('fs'),path=require('path'),sharp=require('sharp');
+const{execSync}=require('child_process');
+let s;try{s=require('sharp')}catch(e){console.log('安装sharp...');execSync('npm install -g sharp',{stdio:'inherit'});s=require('sharp')}
+const fs=require('fs'),path=require('path'),sharp=s;
 const PIC_DIR='<目标图片目录绝对路径>';
 const MCP_URL='<从.mcp.json读取的url>';
 const API_KEY='<从.mcp.json读取的NX_API_KEY>';
