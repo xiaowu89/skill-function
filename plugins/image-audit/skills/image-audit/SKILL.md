@@ -57,9 +57,10 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 
 ### 步骤 2：安装 sharp + 执行审核（一次调用）
 
-将以下脚本保存为 `/tmp/audit.js`，修改脚本开头的 `PIC_DIR` 为目标图片目录，然后执行：
+**先删除旧脚本**避免残留，然后将以下脚本保存为 `/tmp/audit.js`，修改 `PIC_DIR` 为目标图片目录，执行：
 
 ```bash
+rm -f /tmp/audit.js
 NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node /tmp/audit.js
 ```
