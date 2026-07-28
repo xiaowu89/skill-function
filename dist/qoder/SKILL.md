@@ -63,10 +63,10 @@ cat .mcp.json 2>/dev/null || cat ~/.mcp.json 2>/dev/null
 NODE_PATH=$(npm root -g) node -e "require('sharp')" 2>/dev/null || npm install -g sharp
 NODE_PATH=$(npm root -g) node << 'AUDITEOF'
 const fs=require('fs'),path=require('path'),sharp=require('sharp');
-let PIC_DIR='<目标图片目录绝对路径>';
-const SINGLE_FILE='<单张图片路径，为空则审核整个目录>';
-const MCP_URL='<从.mcp.json读取的url>';
-const API_KEY='<从.mcp.json读取的NX_API_KEY>';
+let PIC_DIR='需替换为图片目录绝对路径';
+const SINGLE_FILE='留空审核目录，填路径只审该文件';
+const MCP_URL='需替换为MCP服务URL';
+const API_KEY='需替换为API Key';
 (async()=>{
 const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
 let imgs;
