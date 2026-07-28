@@ -1,6 +1,6 @@
 ---
 name: image-audit
-description: Detects adult, political and violent content in images via automated batch auditing. Compresses all images before audit, calls MCP audit service, and outputs results as a table. Use when auditing images, checking image content, scanning photos for inappropriate material, or when the user says audit images, review pictures, check content, or image moderation.
+description: 自动化图片内容审核工作流。全量压缩后批量审核，支持鉴黄、政治、暴恐识别，以表格汇总结果。Use when auditing images, checking image content, or scanning photos for inappropriate material.
 license: MIT
 compatibility: Requires Node.js >= 18 with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured. No Python required.
 metadata:
