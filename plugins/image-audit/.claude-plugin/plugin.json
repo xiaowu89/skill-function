@@ -1,1 +1,1 @@
-{"name":"image-audit","version":"1.1.2","description":"Automated image content moderation via MCP","author":"xiaowu89","skills":["plugins/image-audit/skills/image-audit"]}
+{"name":"image-audit","version":"1.1.2","description":"Automated image content moderation via MCP","author":"xiaowu89","skills":["plugins/image-audit/skills/image-audit"],"mcpServers":{"nx-mcp-audit":{"type":"url","url":"https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp"}}}
