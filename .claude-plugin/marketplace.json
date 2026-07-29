@@ -1,0 +1,1 @@
+{"name":"xiaowu89-skills","owner":{"name":"xiaowu89"},"plugins":[{"name":"image-audit","description":"Automated image content moderation via MCP. Detects adult/political/violent content.","source":{"source":"url","url":"https://github.com/xiaowu89/skill-function.git","sha":"6c7920043524d3bbd976a2673f869d19caf28731"},"homepage":"https://github.com/xiaowu89/skill-function"}]}
