@@ -1,1 +1,1 @@
-{"name":"skill-function","version":"1.0.0","description":"Image content moderation and audit skills","plugins":[{"name":"image-audit","path":"plugins/image-audit","version":"1.1.2","description":"Automated image content moderation workflow"}]}
+{"name":"skill-function","owner":"xiaowu89","version":"1.0.0","description":"Image content moderation and audit skills","plugins":[{"name":"image-audit","path":"plugins/image-audit","version":"1.1.2","description":"Automated image content moderation workflow"}]}
