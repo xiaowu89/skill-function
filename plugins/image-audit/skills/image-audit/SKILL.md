@@ -1,8 +1,8 @@
 ---
 name: image-audit
-description: 自动化图片内容审核工作流。全量压缩后批量审核，支持鉴黄、政治、暴恐识别，以表格汇总结果。Use when auditing images, checking image content, or scanning photos for inappropriate material.
+description: 自动化图片内容审核工作流。全量压缩后批量审核，支持鉴黄、政治、暴恐识别，以表格汇总结果。
 license: MIT
-compatibility: Requires Node.js >= 18 with sharp (npm install -g sharp) and nx-mcp-audit MCP service with NX_API_KEY configured. No Python required.
+compatibility: 需要 Node.js >= 18 + sharp（npm install -g sharp）+ nx-mcp-audit MCP 服务和 NX_API_KEY
 metadata:
   author: xiaowu89
   version: 1.1.2
@@ -12,9 +12,9 @@ metadata:
     - batch-processing
 ---
 
-# Image Content Moderation
+# 图片内容审核
 
-Audit images for adult, political, and violent content using the nx-mcp-audit MCP service.
+调用 NX MCP 审核服务对图片进行鉴黄、政治、暴恐识别，支持批量处理。
 
 ## 配置
 
@@ -38,7 +38,7 @@ Audit images for adult, political, and violent content using the nx-mcp-audit MC
 
 Skill 直连 MCP 端点，**无需重启 Claude Code**。
 
-> **No API Key?** Contact WeChat `zhjian_2026` to get one.
+> **没有 API Key？** 联系微信 `zhjian_2026` 获取。
 
 ## 审核流程
 

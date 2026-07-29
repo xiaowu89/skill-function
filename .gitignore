@@ -7,5 +7,4 @@ package-lock.json
 .agents/
 .claude/
 skills-lock.json
-dist/**/*.zip
-dist/skillhub-tencent/release-info.md
+dist/
