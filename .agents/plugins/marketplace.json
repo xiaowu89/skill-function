@@ -1,1 +1,1 @@
-{"name": "xiaowu89-skills", "plugins": [{"name": "image-audit", "source": {"source": "url", "url": "https://github.com/xiaowu89/skill-function.git"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}}]}
+{"name": "xiaowu89-skills", "interface": {"displayName": "xiaowu89 Skills"}, "plugins": [{"name": "image-audit", "source": {"source": "local", "path": "./plugins/image-audit"}, "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Productivity"}]}
