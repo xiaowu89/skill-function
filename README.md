@@ -1,71 +1,60 @@
 # image-audit — 图片内容审核 Skill
 
-自动化图片内容审核（鉴黄 / 政治 / 暴恐），支持批量处理，以表格汇总结果。
+直连 NX API 对图片进行鉴黄、政治、暴恐识别。自动压缩后并发审核，以表格汇总结果。
 
 ## 快速安装
 
-### Claude Code（用户级）
+### skills.sh（推荐）
+
+```bash
+npx skills add https://github.com/xiaowu89/skill-function --skill image-audit
+```
+
+### GitHub 安装
+
+```bash
+npx skills add https://github.com/xiaowu89/skill-function
+```
+
+### 手动安装
 
 ```bash
 git clone https://github.com/xiaowu89/skill-function.git /tmp/sf && \
-cp -r /tmp/sf/plugins/image-audit/skills/image-audit/ ~/.claude/skills/ && \
+cp -r /tmp/sf/skills/image-audit ~/.claude/skills/ && \
 rm -rf /tmp/sf
 ```
 
-### Claude Code（项目级）
+## 配置
+
+Skill 通过 `.env` 文件读取 `NX_API_KEY`，首次使用时会自动引导配置。
 
 ```bash
-git clone https://github.com/xiaowu89/skill-function.git /tmp/sf && \
-cp -r /tmp/sf/plugins/image-audit/skills/image-audit/ .claude/skills/ && \
-rm -rf /tmp/sf
+# 在项目根目录（或任意位置）创建 .env
+NX_API_KEY=你的API_Key
 ```
 
-### 通过 skills.sh 安装
+> **没有 API Key？** 联系微信 `zhijian_2026` 获取。
 
-```bash
-npx skills add xiaowu89/skill-function --yes
-```
-
-## 配置 MCP 服务
-
-在用户目录创建 `.mcp.json`（`%USERPROFILE%\.mcp.json`）：
-
-```json
-{
-  "mcpServers": {
-    "nx-mcp-audit": {
-      "type": "url",
-      "url": "https://mcp.api-inference.modelscope.net/da16b3f65bdb4e/mcp",
-      "env": {
-        "NX_API_KEY": "你的 API Key"
-      }
-    }
-  }
-}
-```
-
-> **没有 API Key？** 联系微信 `zhjian_2026` 获取。
-
-配置后重启 Claude Code 即可使用。
+配置后无需重启，直接使用。
 
 ## 使用
 
-在 Claude Code 中输入 `/image-audit` 或直接说"审核图片"，然后提供图片路径：
+在 Claude Code 中输入 `/image-audit`，然后提供图片路径：
 
 ```
-审核 E:/images/photo1.png
-审核 E:/images/folder/   // 批量审核文件夹
+/image-audit 审核 E:/images/                    # 批量审核文件夹
+/image-audit 审核 E:/images/photo1.png          # 单张审核
 ```
 
-Skill 会自动完成压缩 → 审核 → 汇总 → 给出建议。
+Skill 自动完成压缩 → 并发审核 → 表格汇总。
 
 ## 审核流程
 
 | 步骤 | 说明 |
 |------|------|
-| 收集 | 支持文件夹路径、单张路径、网络 URL |
-| 压缩 | sharp 自动压缩（500px, JPEG Q40），通过网关 4MB 限制 |
-| 审核 | MCP 调用 `nx_img_audit`，每次最多 20 张 |
+| 检查配置 | 读取 `.env` 中的 `NX_API_KEY`，缺失则引导用户配置 |
+| 压缩 | sharp 自动压缩（500px, JPEG Q40），纯内存不留文件 |
+| 审核 | ≤20 张 1 批直发，>20 张均分多批并发，`files` 字段传多文件 |
 | 汇总 | 表格展示通过 / 违规 / 失败 |
 | 建议 | 违规建议删除或人工复核 |
 
@@ -73,7 +62,7 @@ Skill 会自动完成压缩 → 审核 → 汇总 → 给出建议。
 
 - Node.js ≥ 18
 - sharp（运行时自动安装，首次约 11 秒）
-- nx-mcp-audit MCP 服务 + API Key
+- NX_API_KEY
 
 ## 许可证
 
