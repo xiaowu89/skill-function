@@ -65,17 +65,13 @@ node ~/.claude/skills/image-audit/scripts/audit.js "<目标路径>" --channel=gi
 
 执行前先 `ls` 确认脚本存在，选存在的路径。
 
-可选的 URL 参数（与本地文件混合审核）：
+可选参数：
 
-```bash
-node <脚本路径> "<目标路径>" --channel=github --urls=https://a.com/1.jpg,https://a.com/2.jpg
-```
-
-可选的 Key 参数（优先级高于 `.env`）：
-
-```bash
-node <脚本路径> "<目标路径>" --channel=github --key=你的Key
-```
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--key=` | 读 `.env` | API Key |
+| `--channel=` | `github` | 分发平台标识 |
+| `--urls=` | — | URL 列表，逗号分隔 |
 
 ## 结果与错误
 
