@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @version 1.2.0
 // ===== 图片审核脚本 =====
 // 用法:
 //   node audit.js <目录路径> [--key=xxx]
