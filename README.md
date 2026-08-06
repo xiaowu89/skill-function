@@ -20,7 +20,8 @@ npx skills add https://github.com/xiaowu89/skill-function
 
 ```bash
 git clone https://github.com/xiaowu89/skill-function.git /tmp/sf && \
-cp -r /tmp/sf/skills/image-audit ~/.claude/skills/ && \
+mkdir -p ~/.claude/skills/image-audit && \
+cp -r /tmp/sf/. ~/.claude/skills/image-audit/ && \
 rm -rf /tmp/sf
 ```
 
