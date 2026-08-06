@@ -1,55 +1,86 @@
 #!/usr/bin/env node
-// @version 1.2.0
+// @version 1.3.0
 // ===== 图片审核脚本 =====
 // 用法:
-//   node audit.js <目录路径> [--key=xxx]
-//   node audit.js <单张图片路径> [--key=xxx]
+//   node audit.js <目录路径> [--key=xxx] [--client=xxx]
+//   node audit.js <单张图片路径> [--key=xxx] [--client=xxx]
 //
 // API Key 优先级: --key 参数 > NX_API_KEY 环境变量
+// deviceId 优先级: --client 参数 > NX_CLIENT_ID 环境变量 > 自动机器指纹
 
-const fs=require('fs'),path=require('path');
+const fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto');
 
 // ===== 读取 .env 文件 =====
+// 查找链: 当前目录逐级向上爬到根 → 兜底主目录 ~/.env，就近优先合并，已有环境变量优先
+function findEnvFiles(){
+  const files=[];
+  let dir=process.cwd();
+  while(true){
+    const candidate=path.join(dir,'.env');
+    if(fs.existsSync(candidate)) files.push(candidate);
+    const parent=path.dirname(dir);
+    if(parent===dir) break;
+    dir=parent;
+  }
+  const homeEnv=path.join(os.homedir(),'.env');
+  if(fs.existsSync(homeEnv)) files.push(homeEnv);
+  return files;
+}
 function loadEnv(){
-  const cwd=process.cwd();
-  const envFile=path.join(cwd,'.env');
-  if(!fs.existsSync(envFile)) return;
-  const lines=fs.readFileSync(envFile,'utf-8').split(/\r?\n/);
-  for(const line of lines){
-    const trimmed=line.trim();
-    if(!trimmed||trimmed.startsWith('#')) continue;
-    const idx=trimmed.indexOf('=');
-    if(idx===-1) continue;
-    const key=trimmed.slice(0,idx).trim();
-    const val=trimmed.slice(idx+1).trim().replace(/^["']|["']$/g,'');
-    if(!process.env[key]) process.env[key]=val;
+  for(const envFile of findEnvFiles()){
+    const lines=fs.readFileSync(envFile,'utf-8').split(/\r?\n/);
+    for(const line of lines){
+      const trimmed=line.trim();
+      if(!trimmed||trimmed.startsWith('#')) continue;
+      const idx=trimmed.indexOf('=');
+      if(idx===-1) continue;
+      const key=trimmed.slice(0,idx).trim();
+      const val=trimmed.slice(idx+1).trim().replace(/^["']|["']$/g,'');
+      if(!process.env[key]) process.env[key]=val;
+    }
   }
 }
 loadEnv();
 
+// ===== 电脑唯一标识 =====
+// 服务端用于区分来源电脑，优先级: --client 参数 > NX_CLIENT_ID 环境变量 > 自动机器指纹
+function getMachineId(){
+  // hostname + 非 internal 网卡 MAC 排序后哈希，单机稳定、跨机唯一，无外部环境依赖
+  const macs=[];
+  for(const name of Object.keys(os.networkInterfaces())){
+    for(const iface of (os.networkInterfaces()[name]||[])){
+      if(!iface.internal&&iface.mac&&(iface.mac!=='00:00:00:00:00:00')) macs.push(iface.mac);
+    }
+  }
+  return crypto.createHash('sha256').update([os.hostname(),...macs.sort()].join('|')).digest('hex').slice(0,16);
+}
+
 // ===== 参数解析 =====
 const args=process.argv.slice(2);
 if(args.length===0||args.includes('-h')||args.includes('--help')){
-  console.log('用法: node audit.js <图片目录|单张图片路径> [--key=API_KEY]');
+  console.log('用法: node audit.js <图片目录|单张图片路径> [--key=API_KEY] [--client=客户端标识]');
   console.log('API Key 优先级: --key 参数 > NX_API_KEY 环境变量 > .env 文件');
+  console.log('deviceId 优先级: --client 参数 > NX_CLIENT_ID 环境变量 > 自动机器指纹');
   process.exit(args.length===0?1:0);
 }
 
 let apiKey='';
 let channel='';
+let clientId='';
 let inputPath='';
 let urlList=[];
 for(const arg of args){
   if(arg.startsWith('--key=')){apiKey=arg.slice(6)}
   else if(arg.startsWith('--channel=')){channel=arg.slice(10)}
+  else if(arg.startsWith('--client=')){clientId=arg.slice(9)}
   else if(arg.startsWith('--urls=')){urlList=arg.slice(7).split(',').filter(Boolean)}
   else if(!arg.startsWith('--')){inputPath=arg}
 }
 apiKey=apiKey||process.env.NX_API_KEY||'';
 channel=channel||'github';
+clientId=clientId||process.env.NX_CLIENT_ID||getMachineId();
 
 if(!inputPath&&urlList.length===0){console.error('请提供图片目录/文件路径，或通过 --urls= 传入');process.exit(1);}
-if(!apiKey) console.warn('⚠️ NX_API_KEY 未设置，API 可能返回认证错误\n');
 
 inputPath=path.resolve(inputPath.replace(/\\/g,'/'));
 
@@ -78,7 +109,7 @@ async function main(){
   const sharp=await ensureSharp();
 
   const API_URL='https://ai.nxtici.com/v1/nx/imgSecCheck';
-  const exts=['.png','.jpg','.jpeg','.webp','.bmp','.tga'];
+  const exts=['.png','.jpg','.jpeg','.webp'];
   const records=[];let compTotal=0;
 
   // 阶段 1：本地文件扫描 + 压缩（如有）
@@ -152,7 +183,7 @@ async function main(){
         try{
           const res=await fetch(API_URL,{
             method:'POST',
-            headers:{'Authorization':`Bearer ${apiKey}`,'authSource':'api','authChannel':channel},
+            headers:{'Authorization':`Bearer ${apiKey}`,'authSource':'api','authChannel':channel,'deviceId':clientId},
             body:fd,
           });
           const data=await res.json();
@@ -184,13 +215,13 @@ async function main(){
       try{
         const res=await fetch(API_URL,{
           method:'POST',
-          headers:{'Authorization':`Bearer ${apiKey}`,'authSource':'api','authChannel':channel},
+          headers:{'Authorization':`Bearer ${apiKey}`,'authSource':'api','authChannel':channel,'deviceId':clientId},
           body:fd,
         });
         const data=await res.json();
         if(data.code!==0){
           console.log(`  [urls] ⚠️ ${data.message||'API错误'}`);
-          for(const u of urlList){urlRecords.push({name:u.split('/').pop().split('?')[0],origKb:0,compKb:0,buffer:undefined,apiError:data.message,isUrl:true})}
+          for(const u of urlList){urlRecords.push({name:u.split('/').pop().split('?')[0],origKb:0,compKb:0,buffer:undefined,apiError:data.message||'API错误',isUrl:true})}
         }else{
           const items=data.data&&(Array.isArray(data.data.items)?data.data.items:[data.data])||[];
           for(const item of items){
