@@ -45,14 +45,20 @@ loadEnv();
 // ===== 电脑唯一标识 =====
 // 服务端用于区分来源电脑，优先级: --client 参数 > NX_CLIENT_ID 环境变量 > 自动机器指纹
 function getMachineId(){
-  // hostname + 非 internal 网卡 MAC 排序后哈希，单机稳定、跨机唯一，无外部环境依赖
+  // 固定持久化：首次生成写入 ~/.nx_device_id，之后始终返回同一值（网卡变化不影响）
+  const file=path.join(os.homedir(),'.nx_device_id');
+  try{
+    if(fs.existsSync(file)) return fs.readFileSync(file,'utf-8').trim();
+  }catch(_){}
   const macs=[];
   for(const name of Object.keys(os.networkInterfaces())){
     for(const iface of (os.networkInterfaces()[name]||[])){
       if(!iface.internal&&iface.mac&&(iface.mac!=='00:00:00:00:00:00')) macs.push(iface.mac);
     }
   }
-  return crypto.createHash('sha256').update([os.hostname(),...macs.sort()].join('|')).digest('hex').slice(0,16);
+  const id=crypto.createHash('sha256').update([os.hostname(),...macs.sort()].join('|')).digest('hex').slice(0,16);
+  try{fs.writeFileSync(file,id)}catch(_){}
+  return id;
 }
 
 // ===== 参数解析 =====
